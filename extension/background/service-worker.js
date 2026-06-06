@@ -365,19 +365,33 @@ async function resolveCampaignId(gameId, profile) {
 }
 
 async function playSceneAudio(scene, isCombat) {
-  const url = isCombat ? (scene.combat_url || scene.ambient_url) : scene.ambient_url;
-  let audioUrl = url;
-  // Fallback: default music from campaigns table
+  // Priority for combat: scene combat → default combat → scene ambient → default ambient.
+  // Default combat is checked before falling back to scene ambient so that
+  // initiative always switches the track when a default/combat file exists.
+  let audioUrl = null;
+  if (isCombat) {
+    audioUrl = scene.combat_url || null;
+  } else {
+    audioUrl = scene.ambient_url || null;
+  }
+
   if (!audioUrl && scene.campaign_id) {
     const { data } = await sb
       .from('campaigns')
       .select('default_ambient_url, default_combat_url')
       .eq('id', scene.campaign_id)
       .single();
-    audioUrl = isCombat
-      ? (data?.default_combat_url || data?.default_ambient_url)
-      : data?.default_ambient_url;
+
+    if (isCombat) {
+      audioUrl = data?.default_combat_url
+              || scene.ambient_url
+              || data?.default_ambient_url
+              || null;
+    } else {
+      audioUrl = data?.default_ambient_url || null;
+    }
   }
+
   if (audioUrl) sendAudio({ type: 'PLAY_MUSIC', url: audioUrl });
   else          sendAudio({ type: 'STOP_MUSIC' });
 }

@@ -725,9 +725,9 @@
       const activeRow = body.querySelector('.dnd-scene-row.active');
       if (!activeRow) return;
       const sceneId   = activeRow.dataset.sceneId;
-      const scene     = (window._dndScenes || []).find(s => s.id === sceneId);
+      const scene    = (window._dndScenes || []).find(s => s.id === sceneId);
       if (!scene) return;
-      const isCombat  = body.querySelector('#dnd-initiative-btn')?.dataset.active === 'true';
+      const isCombat = body.querySelector('#dnd-initiative-btn')?.dataset.active === 'true';
       const vol       = parseFloat(body.querySelector('#dnd-volume-slider')?.value ?? 0.8);
       const url       = resolveAudioUrl(scene, isCombat);
       if (url) chrome.runtime.sendMessage({ type: 'AUDIO_PLAY', url, volume: vol });
@@ -842,7 +842,7 @@
       const activeRow = body.querySelector('.dnd-scene-row.active');
       if (activeRow) {
         const sceneId = activeRow.dataset.sceneId;
-        const scene   = (scenesResp.scenes || []).find(s => s.id === sceneId);
+        const scene   = (window._dndScenes || []).find(s => s.id === sceneId);
         if (scene) {
           applyScene(scene, isCombatActive);
           const vol = parseFloat(body.querySelector('#dnd-volume-slider')?.value ?? 0.8);
@@ -904,16 +904,21 @@
     btn.classList.toggle('combat-active', active);
   }
 
-  // Feature 5: resolve audio URL with fallback to default music from DB
+  // Feature 5: resolve audio URL with fallback to default music from DB.
+  // Priority for combat: scene combat → default combat → scene ambient → default ambient.
+  // Priority for ambient: scene ambient → default ambient.
+  // Default combat is tried BEFORE falling back to ambient so initiative always
+  // switches music when a default/combat track exists, even if the scene has an
+  // ambient track but no explicit combat track.
   function resolveAudioUrl(scene, isCombat) {
-    const url = isCombat
-      ? (scene.combat_url || scene.ambient_url)
-      : scene.ambient_url;
-    if (url) return url;
-    // Fallback: default URLs loaded from campaigns table on DM panel init
-    return isCombat
-      ? (window._dndDefaultCombat || window._dndDefaultAmbient || null)
-      : (window._dndDefaultAmbient || null);
+    if (isCombat) {
+      return scene.combat_url
+          || window._dndDefaultCombat
+          || scene.ambient_url
+          || window._dndDefaultAmbient
+          || null;
+    }
+    return scene.ambient_url || window._dndDefaultAmbient || null;
   }
 
   function renderSceneButtons(scenes, activeSceneId, campaignId, isCombat, weatherPresets = [], onRefresh) {
