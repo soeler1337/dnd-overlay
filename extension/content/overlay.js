@@ -52,6 +52,51 @@
     gifOverlay.style.left = offset + 'px';
   });
 
+  // -------------------------------------------------------------------------
+  // Lift DDB UI elements above our bg overlays (z-index 50/51).
+  // CSS z-index alone fails because DDB has nested stacking contexts – an
+  // ancestor with z-index < 50 "caps" everything inside it.
+  // Solution: walk the ancestor chain of the target element and raise every
+  // positioned ancestor's z-index above 51.
+  // -------------------------------------------------------------------------
+  const DND_OVERLAY_BG_Z = 52; // one above our highest bg overlay
+
+  function liftAboveBg(classFragment) {
+    function lift(el) {
+      let node = el.parentElement;
+      while (node && node !== document.documentElement) {
+        const cs  = window.getComputedStyle(node);
+        const pos = cs.position;
+        if (pos !== 'static') {
+          const zi = parseInt(cs.zIndex);
+          // Only touch nodes whose current z-index would lose against our bg
+          if (isNaN(zi) || zi < DND_OVERLAY_BG_Z) {
+            node.style.setProperty('z-index', String(DND_OVERLAY_BG_Z), 'important');
+          }
+        }
+        node = node.parentElement;
+      }
+    }
+
+    let lifted = false;
+    function tryLift() {
+      if (lifted) return;
+      const el = document.querySelector(`[class*="${classFragment}"]`);
+      if (!el) return;
+      lift(el);
+      lifted = true;
+      obs.disconnect(); // stop observing once lifted
+    }
+
+    const obs = new MutationObserver(tryLift);
+    obs.observe(document.body, { childList: true, subtree: true });
+    tryLift(); // try immediately in case element already exists
+  }
+
+  // DDB scene-switcher bar (top) and dice-roller toolbar (bottom-right)
+  liftAboveBg('scenarioMenuEncounters');
+  liftAboveBg('bottomRightTools');
+
   function setBackground(url, opacity) {
     if (url) {
       bgOverlay.style.backgroundImage = `url(${JSON.stringify(url)})`;

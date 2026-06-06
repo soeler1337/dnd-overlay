@@ -892,21 +892,6 @@
 .dnd-notes-rendered code { background: var(--dnd-bg0); padding: 1px 5px; border-radius: 3px; font-size: 11px; }
 
 
-/* =========================================================
-   DDB-native scene/encounter bar – DM-only visibility fix
-   Keeps the bar above our bg overlays (z-index 50/51) so
-   the DM can still switch DDB scenes while the overlay is on.
-   pointer-events on our bg divs are already none, so no
-   click-blocking – this is purely a z-index/visual fix.
-   ========================================================= */
-.styles-module__zzLIoG__scenarioMenuEncounters {
-  position: relative;
-  z-index: 100 !important;
-}
-
-/* DDB dice toolbar (bottom-right) – keep above bg overlays (z-index 50/51)
-   so DM and players can still roll custom dice while a background is active. */
-[class*="bottomRightTools"] {
-  position: relative;
-  z-index: 100 !important;
-}
+/* DDB UI elements (scene bar, dice toolbar) are lifted above our bg overlays
+   via JavaScript in overlay.js (liftAboveBg) because CSS z-index alone fails
+   when DDB's own ancestor elements create stacking contexts with z-index < 50. */
