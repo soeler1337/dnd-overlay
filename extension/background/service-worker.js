@@ -68,21 +68,23 @@ function subscribeToSession(sessionId, campaignId) {
       table:  'sessions',
       filter: 'id=eq.' + sessionId,
     }, async (payload) => {
-      activeSceneId = payload.new.active_scene_id;
+      const wasActive    = activeSceneId;
+      activeSceneId      = payload.new.active_scene_id;
+      const isCombat     = payload.new.is_combat;
+
       if (!activeSceneId) return;
 
-      const { data: scene } = await sb
-        .from('scenes')
-        .select('*')
-        .eq('id', activeSceneId)
-        .single();
+      // Reload scene if scene switched OR combat state changed
+      if (activeSceneId !== wasActive || payload.old.is_combat !== isCombat) {
+        const { data: scene } = await sb
+          .from('scenes')
+          .select('*')
+          .eq('id', activeSceneId)
+          .single();
 
-      if (scene) {
-        broadcastToTabs({ type: 'SCENE_CHANGED', scene });
-        if (scene.music_track_url) {
-          sendAudio({ type: 'PLAY_AUDIO', url: scene.music_track_url });
-        } else {
-          sendAudio({ type: 'STOP_AUDIO' });
+        if (scene) {
+          broadcastToTabs({ type: 'SCENE_CHANGED', scene, isCombat });
+          playSceneAudio(scene, isCombat);
         }
       }
     })
@@ -194,6 +196,15 @@ async function handleMessage(msg) {
       await sendAudio({ type: 'SET_VOLUME', volume: msg.volume });
       return { ok: true };
 
+    case 'INITIATIVE_TOGGLE': {
+      const { error } = await sb
+        .from('sessions')
+        .update({ is_combat: msg.active, updated_at: new Date().toISOString() })
+        .eq('campaign_id', msg.campaignId);
+      if (error) throw error;
+      return { ok: true };
+    }
+
     case 'SCENE_UPDATE_OPACITY': {
       const { error } = await sb
         .from('scenes')
@@ -212,6 +223,12 @@ async function handleMessage(msg) {
 // -------------------------------------------------------------------------
 // Helpers
 // -------------------------------------------------------------------------
+function playSceneAudio(scene, isCombat) {
+  const url = isCombat ? (scene.combat_url || scene.ambient_url) : scene.ambient_url;
+  if (url) sendAudio({ type: 'PLAY_AUDIO', url });
+  else     sendAudio({ type: 'STOP_AUDIO' });
+}
+
 async function fetchProfile(userId) {
   const { data } = await sb.from('profiles').select('*').eq('user_id', userId).single();
   return data;

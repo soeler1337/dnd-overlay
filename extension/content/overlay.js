@@ -40,6 +40,11 @@
   bgOverlay.id = 'dnd-bg-overlay';
   document.body.appendChild(bgOverlay);
 
+  // Animated overlay (GIF on top of background, e.g. rain)
+  const gifOverlay = document.createElement('div');
+  gifOverlay.id = 'dnd-gif-overlay';
+  document.body.appendChild(gifOverlay);
+
   // Restore saved left offset (protects character sheet sidebar)
   chrome.storage.local.get('dnd-left-offset', (r) => {
     const offset = r['dnd-left-offset'] ?? 270;
@@ -118,11 +123,21 @@
   // Realtime messages from service worker
   // -------------------------------------------------------------------------
   chrome.runtime.onMessage.addListener((msg) => {
-    if (msg.type === 'SCENE_CHANGED') applyScene(msg.scene);
+    if (msg.type === 'SCENE_CHANGED') applyScene(msg.scene, msg.isCombat);
   });
 
-  function applyScene(scene) {
-    setBackground(scene.background_url || null, scene.bg_opacity ?? (scene.is_combat ? 0.25 : 0.5));
+  function applyScene(scene, isCombat) {
+    const opacity = isCombat ? 0 : (scene.bg_opacity ?? 0.5);
+    setBackground(scene.background_url || null, opacity);
+
+    // Animated overlay GIF
+    if (scene.overlay_url) {
+      gifOverlay.style.backgroundImage = `url(${JSON.stringify(scene.overlay_url)})`;
+      gifOverlay.style.left = bgOverlay.style.left || '270px';
+      gifOverlay.classList.add('active');
+    } else {
+      gifOverlay.classList.remove('active');
+    }
     // Audio handled in Milestone 4
     // Update active-scene indicator in DM panel if open
     document.querySelectorAll('.dnd-scene-btn').forEach(btn => {
@@ -206,6 +221,12 @@
         <span class="dnd-role-badge dm">DM</span>
       </div>
       <hr class="dnd-divider" />
+      <div id="dnd-initiative-bar">
+        <button class="dnd-btn dnd-initiative-btn" id="dnd-initiative-btn" data-active="false">
+          &#x2694; Initiative starten
+        </button>
+      </div>
+      <hr class="dnd-divider" />
       <div id="dnd-scenes-container">
         <p class="dnd-placeholder">Szenen werden geladen...</p>
       </div>
@@ -277,14 +298,49 @@
       chrome.runtime.sendMessage({ type: 'SESSION_GET', campaignId: profile.campaign_id }),
     ]);
 
+    const session = sessionResp.session;
+
+    // Wire up initiative button
+    const initBtn = body.querySelector('#dnd-initiative-btn');
+    let isCombatActive = session?.is_combat ?? false;
+    updateInitiativeBtn(initBtn, isCombatActive);
+
+    initBtn.addEventListener('click', async () => {
+      isCombatActive = !isCombatActive;
+      updateInitiativeBtn(initBtn, isCombatActive);
+      await chrome.runtime.sendMessage({
+        type: 'INITIATIVE_TOGGLE', active: isCombatActive, campaignId: profile.campaign_id,
+      });
+      // Apply locally - find current active scene
+      const activeBtn = body.querySelector('.dnd-scene-row.active');
+      if (activeBtn) {
+        const sceneId = activeBtn.dataset.sceneId;
+        const scene   = (scenesResp.scenes || []).find(s => s.id === sceneId);
+        if (scene) {
+          applyScene(scene, isCombatActive);
+          const vol = parseFloat(body.querySelector('#dnd-volume-slider')?.value ?? 0.8);
+          const url = isCombatActive ? (scene.combat_url || scene.ambient_url) : scene.ambient_url;
+          if (url) chrome.runtime.sendMessage({ type: 'AUDIO_PLAY', url, volume: vol });
+          else     chrome.runtime.sendMessage({ type: 'AUDIO_STOP' });
+        }
+      }
+    });
+
     renderSceneButtons(
       scenesResp.scenes || [],
-      sessionResp.session?.active_scene_id || null,
-      profile.campaign_id
+      session?.active_scene_id || null,
+      profile.campaign_id,
+      session?.is_combat ?? false
     );
   }
 
-  function renderSceneButtons(scenes, activeSceneId, campaignId) {
+  function updateInitiativeBtn(btn, active) {
+    btn.dataset.active  = active;
+    btn.textContent     = active ? '✓ Initiative läuft - Beenden' : '⚔ Initiative starten';
+    btn.classList.toggle('combat-active', active);
+  }
+
+  function renderSceneButtons(scenes, activeSceneId, campaignId, isCombat) {
     const container = document.getElementById('dnd-scenes-container');
     if (!container) return;
 
@@ -367,8 +423,33 @@
       <hr class="dnd-divider" />
       <p class="dnd-placeholder">Der DM steuert das Geschehen.<br>Aenderungen erscheinen automatisch.</p>
       <hr class="dnd-divider" />
+      <div>
+        <p class="dnd-section-label">Layout</p>
+        <div class="dnd-music-row">
+          <span class="dnd-opacity-label">Char-Sheet<br>Schutz</span>
+          <input type="range" id="dnd-player-offset-slider" class="dnd-opacity-slider"
+            min="0" max="600" step="10" value="270" />
+          <span class="dnd-opacity-val" id="dnd-player-offset-val">270px</span>
+        </div>
+      </div>
+      <hr class="dnd-divider" />
       <button class="dnd-btn dnd-btn-secondary" id="dnd-logout-btn">Ausloggen</button>
     `;
+
+    // Restore + wire player offset slider
+    chrome.storage.local.get('dnd-left-offset', (r) => {
+      const offset = r['dnd-left-offset'] ?? 270;
+      const slider = body.querySelector('#dnd-player-offset-slider');
+      if (slider) {
+        slider.value = offset;
+        body.querySelector('#dnd-player-offset-val').textContent = offset + 'px';
+      }
+    });
+    body.querySelector('#dnd-player-offset-slider').addEventListener('input', function () {
+      const px = parseInt(this.value);
+      body.querySelector('#dnd-player-offset-val').textContent = px + 'px';
+      setLeftOffset(px);
+    });
 
     body.querySelector('#dnd-logout-btn').addEventListener('click', async () => {
       await chrome.runtime.sendMessage({ type: 'AUTH_SIGN_OUT' });

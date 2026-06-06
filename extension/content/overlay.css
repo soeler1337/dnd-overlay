@@ -277,6 +277,59 @@
   font-weight: 600;
 }
 
+/* Animated GIF overlay (rain, fog etc.) */
+#dnd-gif-overlay {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 270px;
+  z-index: 2147483641; /* one above bg overlay */
+  background-size: cover;
+  background-position: center;
+  background-repeat: repeat;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.8s ease;
+}
+
+#dnd-gif-overlay.active {
+  opacity: 0.6;
+}
+
+/* Initiative button */
+.dnd-initiative-btn {
+  all: unset;
+  cursor: pointer;
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  border-radius: 4px;
+  background: #0d2208;
+  border: 1px solid #2a5a20;
+  color: #7acc60;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.dnd-initiative-btn:hover {
+  background: #142e0e;
+  border-color: #5acc40;
+}
+
+.dnd-initiative-btn.combat-active {
+  background: #2c0a0a;
+  border-color: #c8452a;
+  color: #e8705a;
+}
+
+.dnd-initiative-btn.combat-active:hover {
+  background: #3e0e0e;
+}
+
 /* Music controls */
 .dnd-music-row {
   display: flex;

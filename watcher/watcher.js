@@ -82,7 +82,7 @@ async function uploadFile(bucket, storagePath, localPath) {
 // -------------------------------------------------------------------------
 async function syncScene(sceneDir) {
   const folderName = path.basename(sceneDir);
-  const files = fs.readdirSync(sceneDir);
+  const files      = fs.readdirSync(sceneDir);
 
   // Read optional scene.json for metadata
   let meta = { name: folderName, is_combat: false, bg_opacity: null };
@@ -91,34 +91,58 @@ async function syncScene(sceneDir) {
     try { meta = { ...meta, ...JSON.parse(fs.readFileSync(jsonFile, 'utf8')) }; }
     catch { console.warn('[Watcher] Ungueltige scene.json in', folderName); }
   }
-  // Default opacity: 0.25 for combat, 0.5 for normal - unless overridden in scene.json
   if (meta.bg_opacity === null) {
     meta.bg_opacity = meta.is_combat ? 0.25 : 0.5;
   }
 
-  const bgFile    = files.find(isImage);
-  const audioFile = files.find(isAudio);
+  // Background image (root level)
+  const bgFile      = files.find(f => isImage(f) && !f.startsWith('overlay'));
+  // Animated overlay GIF (root level, filename starts with "overlay")
+  const overlayFile = files.find(f => f.toLowerCase().startsWith('overlay') && isImage(f));
 
-  let bgUrl    = null;
-  let audioUrl = null;
+  // Ambient music: ambient/ subfolder
+  const ambientDir  = path.join(sceneDir, 'ambient');
+  const ambientFile = fs.existsSync(ambientDir)
+    ? fs.readdirSync(ambientDir).find(isAudio)
+    : null;
+
+  // Combat music: combat/ subfolder
+  const combatDir   = path.join(sceneDir, 'combat');
+  const combatFile  = fs.existsSync(combatDir)
+    ? fs.readdirSync(combatDir).find(isAudio)
+    : null;
+
+  let bgUrl      = null;
+  let overlayUrl = null;
+  let ambientUrl = null;
+  let combatUrl  = null;
 
   if (bgFile) {
-    console.log(`[Watcher] Lade Hintergrund hoch: ${folderName}/${bgFile}`);
+    console.log(`[Watcher] Hintergrund: ${folderName}/${bgFile}`);
     bgUrl = await uploadFile('backgrounds', `${CAMPAIGN_ID}/${folderName}/${bgFile}`, path.join(sceneDir, bgFile));
   }
-  if (audioFile) {
-    console.log(`[Watcher] Lade Musik hoch: ${folderName}/${audioFile}`);
-    audioUrl = await uploadFile('music', `${CAMPAIGN_ID}/${folderName}/${audioFile}`, path.join(sceneDir, audioFile));
+  if (overlayFile) {
+    console.log(`[Watcher] Overlay-GIF: ${folderName}/${overlayFile}`);
+    overlayUrl = await uploadFile('backgrounds', `${CAMPAIGN_ID}/${folderName}/${overlayFile}`, path.join(sceneDir, overlayFile));
+  }
+  if (ambientFile) {
+    console.log(`[Watcher] Ambient: ${folderName}/ambient/${ambientFile}`);
+    ambientUrl = await uploadFile('music', `${CAMPAIGN_ID}/${folderName}/ambient/${ambientFile}`, path.join(ambientDir, ambientFile));
+  }
+  if (combatFile) {
+    console.log(`[Watcher] Combat: ${folderName}/combat/${combatFile}`);
+    combatUrl = await uploadFile('music', `${CAMPAIGN_ID}/${folderName}/combat/${combatFile}`, path.join(combatDir, combatFile));
   }
 
-  // Upsert scene row by campaign_id + name
   const { error } = await sb.from('scenes').upsert({
-    campaign_id:     CAMPAIGN_ID,
-    name:            meta.name,
-    background_url:  bgUrl,
-    music_track_url: audioUrl,
-    is_combat:       meta.is_combat,
-    bg_opacity:      meta.bg_opacity,
+    campaign_id:    CAMPAIGN_ID,
+    name:           meta.name,
+    background_url: bgUrl,
+    overlay_url:    overlayUrl,
+    ambient_url:    ambientUrl,
+    combat_url:     combatUrl,
+    is_combat:      meta.is_combat,
+    bg_opacity:     meta.bg_opacity,
   }, { onConflict: 'campaign_id,name' });
 
   if (error) console.error('[Watcher] Szene DB-Fehler:', error.message);
