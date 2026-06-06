@@ -199,12 +199,36 @@
         <p class="dnd-placeholder">Szenen werden geladen...</p>
       </div>
       <hr class="dnd-divider" />
+      <div id="dnd-music-controls">
+        <p class="dnd-section-label">Musik</p>
+        <div class="dnd-music-row">
+          <button class="dnd-btn dnd-music-btn" id="dnd-music-stop" title="Stop">&#9646;&#9646;</button>
+          <input type="range" id="dnd-volume-slider" class="dnd-opacity-slider"
+            min="0" max="1" step="0.05" value="0.8" />
+          <span class="dnd-opacity-val" id="dnd-volume-val">80%</span>
+        </div>
+      </div>
+      <hr class="dnd-divider" />
       <button class="dnd-btn dnd-btn-secondary" id="dnd-logout-btn">Ausloggen</button>
     `;
+
+    // Volume slider
+    const volSlider = body.querySelector('#dnd-volume-slider');
+    const volVal    = body.querySelector('#dnd-volume-val');
+    volSlider.addEventListener('input', () => {
+      const v = parseFloat(volSlider.value);
+      volVal.textContent = Math.round(v * 100) + '%';
+      chrome.runtime.sendMessage({ type: 'AUDIO_VOLUME', volume: v });
+    });
+
+    body.querySelector('#dnd-music-stop').addEventListener('click', () => {
+      chrome.runtime.sendMessage({ type: 'AUDIO_STOP' });
+    });
 
     body.querySelector('#dnd-logout-btn').addEventListener('click', async () => {
       await chrome.runtime.sendMessage({ type: 'AUTH_SIGN_OUT' });
       setBackground(null);
+      chrome.runtime.sendMessage({ type: 'AUDIO_STOP' });
       renderLogin();
     });
 
@@ -259,6 +283,12 @@
         wrap.classList.add('active');
         await chrome.runtime.sendMessage({ type: 'SCENE_SWITCH', sceneId: scene.id, campaignId });
         applyScene(scene);
+        if (scene.music_track_url) {
+          const vol = parseFloat(body.querySelector('#dnd-volume-slider')?.value ?? 0.8);
+          chrome.runtime.sendMessage({ type: 'AUDIO_PLAY', url: scene.music_track_url, volume: vol });
+        } else {
+          chrome.runtime.sendMessage({ type: 'AUDIO_STOP' });
+        }
       });
 
       // Opacity slider - live preview

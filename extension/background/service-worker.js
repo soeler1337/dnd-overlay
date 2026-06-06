@@ -19,6 +19,25 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 let realtimeChannel = null;
 
 // -------------------------------------------------------------------------
+// Offscreen Document helpers (audio)
+// -------------------------------------------------------------------------
+async function ensureOffscreen() {
+  const existing = await chrome.offscreen.hasDocument();
+  if (!existing) {
+    await chrome.offscreen.createDocument({
+      url:    chrome.runtime.getURL('offscreen/offscreen.html'),
+      reasons: ['AUDIO_PLAYBACK'],
+      justification: 'Background music playback for DnD sessions',
+    });
+  }
+}
+
+async function sendAudio(msg) {
+  await ensureOffscreen();
+  chrome.runtime.sendMessage({ ...msg, target: 'offscreen' }).catch(() => {});
+}
+
+// -------------------------------------------------------------------------
 // Broadcast to all DDB game tabs
 // -------------------------------------------------------------------------
 async function broadcastToTabs(msg) {
@@ -58,7 +77,14 @@ function subscribeToSession(sessionId, campaignId) {
         .eq('id', activeSceneId)
         .single();
 
-      if (scene) broadcastToTabs({ type: 'SCENE_CHANGED', scene });
+      if (scene) {
+        broadcastToTabs({ type: 'SCENE_CHANGED', scene });
+        if (scene.music_track_url) {
+          sendAudio({ type: 'PLAY_AUDIO', url: scene.music_track_url });
+        } else {
+          sendAudio({ type: 'STOP_AUDIO' });
+        }
+      }
     })
     // Scene row updated = DM changed opacity (or watcher updated background)
     .on('postgres_changes', {
@@ -155,6 +181,18 @@ async function handleMessage(msg) {
       if (error) throw error;
       return { ok: true };
     }
+
+    case 'AUDIO_PLAY':
+      await sendAudio({ type: 'PLAY_AUDIO', url: msg.url, volume: msg.volume });
+      return { ok: true };
+
+    case 'AUDIO_STOP':
+      await sendAudio({ type: 'STOP_AUDIO' });
+      return { ok: true };
+
+    case 'AUDIO_VOLUME':
+      await sendAudio({ type: 'SET_VOLUME', volume: msg.volume });
+      return { ok: true };
 
     case 'SCENE_UPDATE_OPACITY': {
       const { error } = await sb

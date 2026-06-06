@@ -1,19 +1,32 @@
-// Offscreen Document - Audio playback for MV3.
-// Milestone 1: skeleton only. Actual playback logic added in Milestone 4.
+// Offscreen Document - only place in MV3 where audio can play continuously.
+
+const audio = new Audio();
+audio.loop  = true;
 
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.target !== 'offscreen') return;
 
   switch (msg.type) {
+
     case 'PLAY_AUDIO':
-      // TODO Milestone 4: play msg.url via HTMLAudioElement
-      console.log('[Offscreen] PLAY_AUDIO received (not yet implemented):', msg.url);
+      if (msg.url && audio.src !== msg.url) {
+        audio.src = msg.url;
+      }
+      audio.volume = msg.volume ?? 1.0;
+      audio.play().catch(err => console.warn('[Offscreen] play() blocked:', err.message));
       break;
+
     case 'STOP_AUDIO':
-      // TODO Milestone 4: stop current track
-      console.log('[Offscreen] STOP_AUDIO received (not yet implemented)');
+      audio.pause();
+      audio.currentTime = 0;
       break;
-    default:
+
+    case 'SET_VOLUME':
+      audio.volume = Math.max(0, Math.min(1, msg.volume));
+      break;
+
+    case 'PAUSE_AUDIO':
+      audio.pause();
       break;
   }
 });
