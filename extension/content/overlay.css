@@ -318,7 +318,7 @@
 }
 
 .dnd-account-select {
-  all: unset;
+  appearance: auto;
   display: block;
   width: 100%;
   box-sizing: border-box;
@@ -330,6 +330,7 @@
   color: var(--dnd-text);
   cursor: pointer;
   transition: border-color var(--dnd-transition);
+  font-family: inherit;
 }
 
 .dnd-account-select:focus {
@@ -435,43 +436,6 @@
 }
 
 /* =========================================================
-   Stream button
-   ========================================================= */
-.dnd-stream-btn {
-  all: unset;
-  cursor: pointer;
-  display: block;
-  width: 100%;
-  box-sizing: border-box;
-  padding: 7px 12px;
-  border-radius: var(--dnd-radius-sm);
-  background: #0a0a1e;
-  border: 1px solid #1e1e4a;
-  color: #5a5aaa;
-  font-size: 12px;
-  font-weight: 600;
-  text-align: center;
-  letter-spacing: 0.3px;
-  transition: background var(--dnd-transition), border-color var(--dnd-transition), color var(--dnd-transition);
-}
-
-.dnd-stream-btn:hover {
-  background: #10103a;
-  border-color: #3a3a8a;
-  color: #8a8acc;
-}
-
-.dnd-stream-btn.stream-active {
-  background: #2a0808;
-  border-color: #aa2020;
-  color: #dd4040;
-}
-
-.dnd-stream-btn.stream-active:hover {
-  background: #360a0a;
-}
-
-/* =========================================================
    Initiative button
    ========================================================= */
 .dnd-initiative-btn {
@@ -552,7 +516,7 @@
   gap: 8px;
   padding: 5px 10px 6px;
   background: var(--dnd-bg0);
-  border-top: 1px solid #1e160800;
+  border-top: 1px solid #1e1608;
 }
 
 .dnd-opacity-label {
@@ -606,7 +570,7 @@
 
 /* Weather dropdown */
 .dnd-weather-select {
-  all: unset;
+  appearance: auto;
   flex: 1;
   background: var(--dnd-bg0);
   border: 1px solid var(--dnd-border);
@@ -617,6 +581,7 @@
   cursor: pointer;
   box-sizing: border-box;
   transition: border-color var(--dnd-transition);
+  font-family: inherit;
 }
 
 .dnd-weather-select:focus {

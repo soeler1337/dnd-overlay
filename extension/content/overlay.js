@@ -897,15 +897,11 @@
   }
 
   function updateInitiativeBtn(btn, active) {
-    btn.dataset.active  = active;
-    btn.textContent     = active ? '✓ Initiative läuft - Beenden' : '⚔ Initiative starten';
-    btn.classList.toggle('combat-active', active);
-  }
-
-  function updateStreamBtn(btn, active) {
     btn.dataset.active = active;
-    btn.textContent    = active ? '🔴 Stream läuft – Ausblenden' : '🎥 Stream';
-    btn.classList.toggle('stream-active', active);
+    btn.innerHTML      = active
+      ? '&#x2714; Initiative l&auml;uft &ndash; Beenden'
+      : '&#x2694; Initiative starten';
+    btn.classList.toggle('combat-active', active);
   }
 
   // Feature 5: resolve audio URL with fallback to default music from DB
