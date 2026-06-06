@@ -112,9 +112,12 @@
     tryLift();
   }
 
-  // DDB scene-switcher bar (top) and dice-roller toolbar (bottom-right)
+  // DDB scene-switcher bar (top) – z-index lift works for this one
   liftAboveBg('scenarioMenuEncounters');
-  liftAboveBg('bottomRightTools');
+
+  // DDB dice toolbar (bottom-right) – clip our OWN overlays so the toolbar
+  // area is simply transparent (no z-index fight with DDB's DOM at all).
+  clipOverlayAround('bottomRightTools');
 
   function setBackground(url, opacity) {
     if (url) {
@@ -511,6 +514,54 @@
     } else {
       gifOverlay.classList.remove('active');
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // Clip our bg/gif overlays so a specific DDB element area stays transparent.
+  // This avoids z-index fights with DDB's nested stacking contexts entirely –
+  // we just punch a hole in our own element instead of lifting theirs.
+  // -------------------------------------------------------------------------
+  function clipOverlayAround(classFragment) {
+    const PAD = 6; // extra breathing room around element in px
+
+    function computeClip() {
+      const el = document.querySelector(`[class*="${classFragment}"]`);
+      if (!el) return;
+
+      const rect  = el.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+
+      const offL = parseInt(bgOverlay.style.left || '270');
+      const W    = window.innerWidth  - offL;
+      const H    = window.innerHeight;
+
+      // Toolbar rect in overlay-relative coords (overlay starts at x=offL, y=0)
+      const nx = Math.max(0, rect.left   - offL - PAD);
+      const ny = Math.max(0, rect.top           - PAD);
+
+      // Build a polygon that is the full overlay rectangle MINUS a bottom-right
+      // corner notch where the toolbar lives.
+      // Points go clockwise around the visible area:
+      //   top-left → top-right → down right edge → notch top-left →
+      //   notch bottom-left → overlay bottom-left
+      const poly = [
+        `0px 0px`,
+        `${W}px 0px`,
+        `${W}px ${ny}px`,
+        `${nx}px ${ny}px`,
+        `${nx}px ${H}px`,
+        `0px ${H}px`,
+      ].join(', ');
+
+      const val = `polygon(${poly})`;
+      bgOverlay.style.clipPath  = val;
+      gifOverlay.style.clipPath = val;
+    }
+
+    // Run on DOM changes (element may load late) and window resize
+    new MutationObserver(computeClip).observe(document.body, { childList: true, subtree: true });
+    window.addEventListener('resize', computeClip);
+    computeClip();
   }
 
   // -------------------------------------------------------------------------
