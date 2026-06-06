@@ -903,3 +903,10 @@
   position: relative;
   z-index: 100 !important;
 }
+
+/* DDB dice toolbar (bottom-right) – keep above bg overlays (z-index 50/51)
+   so DM and players can still roll custom dice while a background is active. */
+[class*="bottomRightTools"] {
+  position: relative;
+  z-index: 100 !important;
+}
