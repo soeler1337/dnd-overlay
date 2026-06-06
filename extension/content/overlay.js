@@ -234,24 +234,56 @@
     container.innerHTML = `<p class="dnd-section-label">Szene auswaehlen</p>`;
 
     scenes.forEach(scene => {
-      const btn = document.createElement('button');
-      btn.className = 'dnd-btn dnd-scene-btn' + (scene.id === activeSceneId ? ' active' : '');
-      btn.dataset.sceneId = scene.id;
-      btn.textContent = (scene.is_combat ? '⚔ ' : '🏕 ') + scene.name;
+      const isActive = scene.id === activeSceneId;
+      const opacity  = scene.bg_opacity ?? (scene.is_combat ? 0.25 : 0.5);
 
-      btn.addEventListener('click', async () => {
-        document.querySelectorAll('.dnd-scene-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
+      const wrap = document.createElement('div');
+      wrap.className = 'dnd-scene-row' + (isActive ? ' active' : '');
+      wrap.dataset.sceneId = scene.id;
 
-        await chrome.runtime.sendMessage({
-          type: 'SCENE_SWITCH', sceneId: scene.id, campaignId,
-        });
+      wrap.innerHTML = `
+        <button class="dnd-scene-btn" data-scene-id="${scene.id}">
+          ${scene.is_combat ? '&#x2694;' : '&#x1F3D5;'} ${esc(scene.name)}
+        </button>
+        <div class="dnd-opacity-row">
+          <span class="dnd-opacity-label">Helligkeit</span>
+          <input type="range" class="dnd-opacity-slider" min="0" max="1" step="0.05"
+            value="${opacity}" data-scene-id="${scene.id}" />
+          <span class="dnd-opacity-val">${Math.round(opacity * 100)}%</span>
+        </div>
+      `;
 
-        // Apply locally immediately (don't wait for realtime echo)
+      // Scene switch button
+      wrap.querySelector('.dnd-scene-btn').addEventListener('click', async () => {
+        document.querySelectorAll('.dnd-scene-row').forEach(r => r.classList.remove('active'));
+        wrap.classList.add('active');
+        await chrome.runtime.sendMessage({ type: 'SCENE_SWITCH', sceneId: scene.id, campaignId });
         applyScene(scene);
       });
 
-      container.appendChild(btn);
+      // Opacity slider - live preview
+      const slider  = wrap.querySelector('.dnd-opacity-slider');
+      const valSpan = wrap.querySelector('.dnd-opacity-val');
+
+      slider.addEventListener('input', () => {
+        const v = parseFloat(slider.value);
+        valSpan.textContent = Math.round(v * 100) + '%';
+        // Live preview only if this is the active scene
+        if (wrap.classList.contains('active')) {
+          bgOverlay.style.setProperty('--bg-opacity', v);
+        }
+        scene.bg_opacity = v;
+      });
+
+      slider.addEventListener('change', async () => {
+        await chrome.runtime.sendMessage({
+          type: 'SCENE_UPDATE_OPACITY',
+          sceneId: scene.id,
+          opacity: parseFloat(slider.value),
+        });
+      });
+
+      container.appendChild(wrap);
     });
   }
 

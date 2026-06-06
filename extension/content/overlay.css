@@ -274,6 +274,60 @@
   font-weight: 600;
 }
 
+/* Scene rows with opacity slider */
+.dnd-scene-row {
+  margin-bottom: 8px;
+  border: 1px solid #4a3a20;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.dnd-scene-row.active {
+  border-color: #c8a45a;
+}
+
+.dnd-scene-row .dnd-scene-btn {
+  border: none;
+  border-radius: 0;
+  margin: 0;
+  width: 100%;
+}
+
+.dnd-scene-row.active .dnd-scene-btn {
+  background: #2c1a06;
+  color: #c8a45a;
+  font-weight: 600;
+}
+
+.dnd-opacity-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 6px;
+  background: #0d0a04;
+  border-top: 1px solid #2a1a06;
+}
+
+.dnd-opacity-label {
+  font-size: 10px;
+  color: #8a7a60;
+  white-space: nowrap;
+}
+
+.dnd-opacity-slider {
+  flex: 1;
+  accent-color: #c8a45a;
+  height: 4px;
+  cursor: pointer;
+}
+
+.dnd-opacity-val {
+  font-size: 10px;
+  color: #c8a45a;
+  width: 30px;
+  text-align: right;
+}
+
 .dnd-section-label {
   font-size: 10px;
   color: #c8a45a;

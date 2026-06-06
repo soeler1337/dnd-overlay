@@ -128,11 +128,19 @@ async function handleMessage(msg) {
     }
 
     case 'SCENE_SWITCH': {
-      // DM switches active scene
       const { error } = await sb
         .from('sessions')
         .update({ active_scene_id: msg.sceneId, updated_at: new Date().toISOString() })
         .eq('campaign_id', msg.campaignId);
+      if (error) throw error;
+      return { ok: true };
+    }
+
+    case 'SCENE_UPDATE_OPACITY': {
+      const { error } = await sb
+        .from('scenes')
+        .update({ bg_opacity: msg.opacity })
+        .eq('id', msg.sceneId);
       if (error) throw error;
       return { ok: true };
     }
