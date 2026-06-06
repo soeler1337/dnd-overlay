@@ -276,6 +276,19 @@ async function handleMessage(msg) {
       return { ok: true };
     }
 
+    case 'HANDOUT_STREAM': {
+      const { error } = await sb
+        .from('sessions')
+        .update({
+          stream_handout_url:   msg.url   ?? null,
+          stream_handout_title: msg.title ?? null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('campaign_id', msg.campaignId);
+      if (error) throw error;
+      return { ok: true };
+    }
+
     case 'STREAM_TOGGLE': {
       const { error } = await sb
         .from('sessions')

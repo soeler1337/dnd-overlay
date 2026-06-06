@@ -129,6 +129,16 @@
     document.body.appendChild(viewer);
     openViewers[handout.id] = { viewer, ...state };
 
+    // Mirror to stream overlay (DM only, images only)
+    if (window._dndIsDm && !isNotes && handout.file_url && window._dndCampaignId) {
+      chrome.runtime.sendMessage({
+        type: 'HANDOUT_STREAM',
+        url: handout.file_url,
+        title: handout.title,
+        campaignId: window._dndCampaignId,
+      });
+    }
+
     if (!isNotes) {
       const img       = viewer.querySelector('.dnd-hv-img');
       const zoomLabel = viewer.querySelector('.dnd-hv-zoom-label');
@@ -226,6 +236,17 @@
     delete openViewers[handoutId];
     const tab = tabsContainer.querySelector(`[data-handout-id="${handoutId}"]`);
     if (tab) tab.remove();
+    // Clear stream mirror if this was the last open image viewer
+    if (window._dndIsDm && window._dndCampaignId) {
+      const anyImageOpen = Object.values(openViewers).some(v =>
+        v.viewer.querySelector('.dnd-hv-img'));
+      if (!anyImageOpen) {
+        chrome.runtime.sendMessage({
+          type: 'HANDOUT_STREAM', url: null, title: null,
+          campaignId: window._dndCampaignId,
+        });
+      }
+    }
   }
 
   // Update notes viewer content if open
@@ -565,6 +586,8 @@
   // -- App -------------------------------------------------------------------
   async function renderApp(session, profile) {
     const isDm = profile?.role === 'dm';
+    window._dndIsDm          = isDm;
+    window._dndCampaignId    = profile?.campaign_id ?? null;
     isDm ? renderDm(profile) : renderPlayer(profile, session);
   }
 

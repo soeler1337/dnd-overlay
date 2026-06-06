@@ -80,6 +80,52 @@
       transform: translateY(0);
     }
 
+    /* ── Handout Mirror ── */
+    #handout-wrap {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.65);
+      opacity: 0;
+      transition: opacity 0.4s ease;
+      pointer-events: none;
+    }
+    #handout-wrap.visible { opacity: 1; }
+
+    #handout-frame {
+      max-width: 75%;
+      max-height: 80%;
+      display: flex;
+      flex-direction: column;
+      border: 2px solid #c8a45a;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 16px 60px rgba(0,0,0,0.9);
+    }
+
+    #handout-title {
+      background: linear-gradient(180deg, #271c08, #1e1508);
+      color: #c8a45a;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      padding: 9px 16px;
+      border-bottom: 1px solid #c8a45a44;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #handout-img {
+      display: block;
+      max-width: 100%;
+      max-height: calc(80vh - 40px);
+      object-fit: contain;
+      background: #0e0b06;
+    }
+
     /* ── Status (nur sichtbar wenn Stream inaktiv) ── */
     #status {
       position: absolute;
@@ -101,6 +147,12 @@
 <div id="overlay-root">
   <div id="bg"></div>
   <div id="weather"></div>
+  <div id="handout-wrap">
+    <div id="handout-frame">
+      <div id="handout-title"></div>
+      <img id="handout-img" src="" alt="" />
+    </div>
+  </div>
   <div id="portrait"></div>
 </div>
 
@@ -124,8 +176,11 @@
   const root    = document.getElementById('overlay-root');
   const bgEl    = document.getElementById('bg');
   const wxEl    = document.getElementById('weather');
-  const portEl  = document.getElementById('portrait');
-  const statusEl= document.getElementById('status');
+  const portEl      = document.getElementById('portrait');
+  const handoutWrap = document.getElementById('handout-wrap');
+  const handoutImg  = document.getElementById('handout-img');
+  const handoutTitle= document.getElementById('handout-title');
+  const statusEl    = document.getElementById('status');
 
   // ── Zustand ──
   let streamActive  = false;
@@ -161,6 +216,17 @@
     statusEl.style.display = active ? 'none' : 'flex';
   }
 
+  // ── Handout Mirror ──
+  function applyHandout(url, title) {
+    if (!url) {
+      handoutWrap.classList.remove('visible');
+      return;
+    }
+    handoutTitle.textContent = title || '';
+    handoutImg.src = url;
+    handoutWrap.classList.add('visible');
+  }
+
   // ── Portrait anzeigen / verbergen ──
   function showPortrait(url) {
     if (!url) {
@@ -190,13 +256,14 @@
     // Session laden
     const { data: session } = await sb
       .from('sessions')
-      .select('id, active_scene_id, is_combat, stream_active')
+      .select('id, active_scene_id, is_combat, stream_active, stream_handout_url, stream_handout_title')
       .eq('campaign_id', campaignId)
       .single();
 
     if (!session) { statusEl.textContent = 'Keine Session gefunden.'; return; }
 
     setStream(!!session.stream_active);
+    applyHandout(session.stream_handout_url, session.stream_handout_title);
 
     // Aktive Szene laden
     if (session.active_scene_id) {
@@ -216,6 +283,7 @@
       }, async (payload) => {
         const s = payload.new;
         setStream(!!s.stream_active);
+        applyHandout(s.stream_handout_url, s.stream_handout_title);
 
         // Szene gewechselt oder Combat-Status geändert
         if (s.active_scene_id) {
