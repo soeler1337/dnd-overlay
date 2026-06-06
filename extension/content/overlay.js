@@ -1,4 +1,4 @@
-﻿// Content Script - injected into dndbeyond.com/games/* pages.
+// Content Script - injected into dndbeyond.com/games/* pages.
 
 (function () {
   if (document.getElementById('dnd-overlay-root')) return;
@@ -486,7 +486,7 @@
         <div class="dnd-field">
           <label for="dnd-account-select">Konto auswaehlen</label>
           <select id="dnd-account-select" class="dnd-account-select">
-            <option value="" disabled selected>â€” Wer bist du? â€”</option>
+            <option value="" disabled selected>— Wer bist du? —</option>
             ${accounts.map((a, i) => `<option value="${i}">${esc(a.label)}</option>`).join('')}
           </select>
         </div>
@@ -608,7 +608,7 @@
         <div class="dnd-music-row">
           <span class="dnd-opacity-label">&#127783; Wetter</span>
           <select class="dnd-weather-select" id="dnd-global-weather-select">
-            <option value="">â€” keins â€”</option>
+            <option value="">— keins —</option>
           </select>
         </div>
       </div>
@@ -701,7 +701,7 @@
       setLeftOffset(px);
     });
 
-    // Music volume slider â€“ Feature 1: persist
+    // Music volume slider – Feature 1: persist
     const volSlider = body.querySelector('#dnd-volume-slider');
     const volVal    = body.querySelector('#dnd-volume-val');
     volSlider.addEventListener('input', () => {
@@ -711,7 +711,7 @@
       chrome.storage.local.set({ 'dnd-music-vol': v });
     });
 
-    // Weather volume slider â€“ Feature 1: persist
+    // Weather volume slider – Feature 1: persist
     const weatherVolSlider = body.querySelector('#dnd-weather-volume-slider');
     const weatherVolVal    = body.querySelector('#dnd-weather-volume-val');
     weatherVolSlider.addEventListener('input', () => {
@@ -764,7 +764,7 @@
       const hasAmb = !!defaultMusicResp.ambientUrl;
       const hasCom = !!defaultMusicResp.combatUrl;
       defStatus.textContent = hasAmb || hasCom
-        ? `${hasAmb ? 'âœ“ Ambient' : ''}${hasAmb && hasCom ? ' Â· ' : ''}${hasCom ? 'âœ“ Combat' : ''}`
+        ? `${hasAmb ? '✓ Ambient' : ''}${hasAmb && hasCom ? ' · ' : ''}${hasCom ? '✓ Combat' : ''}`
         : 'Kein Standard hinterlegt';
       defStatus.style.color = hasAmb || hasCom ? '#7acc60' : '#6a6050';
     }
@@ -898,8 +898,14 @@
 
   function updateInitiativeBtn(btn, active) {
     btn.dataset.active  = active;
-    btn.textContent     = active ? 'âœ“ Initiative lÃ¤uft - Beenden' : 'âš” Initiative starten';
+    btn.textContent     = active ? '✓ Initiative läuft - Beenden' : '⚔ Initiative starten';
     btn.classList.toggle('combat-active', active);
+  }
+
+  function updateStreamBtn(btn, active) {
+    btn.dataset.active = active;
+    btn.textContent    = active ? '🔴 Stream läuft – Ausblenden' : '🎥 Stream';
+    btn.classList.toggle('stream-active', active);
   }
 
   // Feature 5: resolve audio URL with fallback to default music from DB
@@ -974,7 +980,7 @@
         if (gSel) gSel.value = scene.weather_preset_id || '';
 
         if (combat) {
-          // Initiative lÃ¤uft: nur Sound wechseln, Hintergrund + Wetter bleiben unsichtbar
+          // Initiative läuft: nur Sound wechseln, Hintergrund + Wetter bleiben unsichtbar
           const audioUrl = resolveAudioUrl(scene, true);
           if (audioUrl) chrome.runtime.sendMessage({ type: 'AUDIO_PLAY', url: audioUrl, volume: vol });
           else          chrome.runtime.sendMessage({ type: 'AUDIO_STOP' });
@@ -1026,7 +1032,7 @@
     if (!sounds.length) {
       container.innerHTML = `
         <p class="dnd-section-label">Soundboard</p>
-        <p class="dnd-placeholder">Keine Sounds. Lege <code>.mp3</code>-Dateien in<br><code>content/${campaignId.slice(0,8)}â€¦/sounds/</code> ab.</p>
+        <p class="dnd-placeholder">Keine Sounds. Lege <code>.mp3</code>-Dateien in<br><code>content/${campaignId.slice(0,8)}…/sounds/</code> ab.</p>
       `;
       return;
     }
@@ -1240,4 +1246,3 @@
 
   init();
 })();
-
