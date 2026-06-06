@@ -55,7 +55,7 @@
   function setBackground(url, opacity) {
     if (url) {
       bgOverlay.style.backgroundImage = `url(${JSON.stringify(url)})`;
-      bgOverlay.style.setProperty('--bg-opacity', opacity ?? 0.5);
+      bgOverlay.style.setProperty('--bg-opacity', opacity ?? 0);
       bgOverlay.classList.add('active');
     } else {
       bgOverlay.classList.remove('active');
@@ -97,85 +97,96 @@
     viewer.style.width  = '480px';
     viewer.style.height = '380px';
 
+    // Notes handout: render markdown instead of image
+    const isNotes = handout.type === 'notes';
+
     viewer.innerHTML = `
       <div class="dnd-hv-header">
         <span class="dnd-hv-title">${esc(handout.title)}</span>
         <button class="dnd-hv-btn dnd-hv-minimize" title="Minimieren">&#8722;</button>
         <button class="dnd-hv-btn dnd-hv-close" title="Schliessen">&times;</button>
       </div>
-      <div class="dnd-hv-body">
-        <div class="dnd-hv-img-wrap">
-          <img class="dnd-hv-img" src="${handout.file_url}" alt="${esc(handout.title)}" draggable="false" />
+      ${isNotes ? `
+        <div class="dnd-hv-body dnd-hv-notes-body">
+          <div class="dnd-notes-rendered">${renderMarkdown(handout.content || '')}</div>
         </div>
-      </div>
-      <div class="dnd-hv-zoom-bar">
-        <button class="dnd-hv-zoom-btn dnd-hv-zoom-out" title="Verkleinern">&#8722;</button>
-        <span class="dnd-hv-zoom-label">100%</span>
-        <button class="dnd-hv-zoom-btn dnd-hv-zoom-in" title="Vergrossern">+</button>
-        <button class="dnd-hv-zoom-btn" style="margin-left:auto" title="Auf Fenster einpassen">&#9635;</button>
-      </div>
+      ` : `
+        <div class="dnd-hv-body">
+          <div class="dnd-hv-img-wrap">
+            <img class="dnd-hv-img" src="${handout.file_url}" alt="${esc(handout.title)}" draggable="false" />
+          </div>
+        </div>
+        <div class="dnd-hv-zoom-bar">
+          <button class="dnd-hv-zoom-btn dnd-hv-zoom-out" title="Verkleinern">&#8722;</button>
+          <span class="dnd-hv-zoom-label">100%</span>
+          <button class="dnd-hv-zoom-btn dnd-hv-zoom-in" title="Vergrossern">+</button>
+          <button class="dnd-hv-zoom-btn" style="margin-left:auto" title="Auf Fenster einpassen">&#9635;</button>
+        </div>
+      `}
       <div class="dnd-hv-resize" title="Groesse aendern"></div>
     `;
 
     document.body.appendChild(viewer);
     openViewers[handout.id] = { viewer, ...state };
 
-    const img       = viewer.querySelector('.dnd-hv-img');
-    const zoomLabel = viewer.querySelector('.dnd-hv-zoom-label');
-    const imgWrap   = viewer.querySelector('.dnd-hv-img-wrap');
+    if (!isNotes) {
+      const img       = viewer.querySelector('.dnd-hv-img');
+      const zoomLabel = viewer.querySelector('.dnd-hv-zoom-label');
+      const imgWrap   = viewer.querySelector('.dnd-hv-img-wrap');
 
-    function applyTransform() {
-      const s = openViewers[handout.id];
-      img.style.transform = `translate(${s.panX}px, ${s.panY}px) scale(${s.zoom})`;
-      zoomLabel.textContent = Math.round(s.zoom * 100) + '%';
+      function applyTransform() {
+        const s = openViewers[handout.id];
+        img.style.transform = `translate(${s.panX}px, ${s.panY}px) scale(${s.zoom})`;
+        zoomLabel.textContent = Math.round(s.zoom * 100) + '%';
+      }
+
+      function setZoom(delta) {
+        const s = openViewers[handout.id];
+        s.zoom  = Math.max(0.1, Math.min(8, s.zoom + delta));
+        applyTransform();
+      }
+
+      // Zoom buttons
+      viewer.querySelector('.dnd-hv-zoom-in').addEventListener('click',  () => setZoom(+0.25));
+      viewer.querySelector('.dnd-hv-zoom-out').addEventListener('click', () => setZoom(-0.25));
+
+      // Fit-to-window button
+      viewer.querySelectorAll('.dnd-hv-zoom-btn')[2].addEventListener('click', () => {
+        const s     = openViewers[handout.id];
+        const wW    = imgWrap.clientWidth;
+        const wH    = imgWrap.clientHeight;
+        const iW    = img.naturalWidth  || img.clientWidth;
+        const iH    = img.naturalHeight || img.clientHeight;
+        s.zoom      = Math.min(wW / iW, wH / iH, 1);
+        s.panX      = 0;
+        s.panY      = 0;
+        applyTransform();
+      });
+
+      // Mouse-wheel zoom
+      imgWrap.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        setZoom(e.deltaY < 0 ? +0.15 : -0.15);
+      }, { passive: false });
+
+      // Pan (drag image)
+      let panStart = null;
+      imgWrap.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        panStart = { x: e.clientX, y: e.clientY,
+          px: openViewers[handout.id].panX, py: openViewers[handout.id].panY };
+        e.preventDefault();
+      });
+      document.addEventListener('mousemove', (e) => {
+        if (!panStart || !openViewers[handout.id]) return;
+        if (!viewer.contains(imgWrap)) return;
+        const s = openViewers[handout.id];
+        s.panX  = panStart.px + (e.clientX - panStart.x);
+        s.panY  = panStart.py + (e.clientY - panStart.y);
+        applyTransform();
+      });
+      document.addEventListener('mouseup', () => { panStart = null; });
     }
-
-    function setZoom(delta) {
-      const s = openViewers[handout.id];
-      s.zoom  = Math.max(0.1, Math.min(8, s.zoom + delta));
-      applyTransform();
-    }
-
-    // Zoom buttons
-    viewer.querySelector('.dnd-hv-zoom-in').addEventListener('click',  () => setZoom(+0.25));
-    viewer.querySelector('.dnd-hv-zoom-out').addEventListener('click', () => setZoom(-0.25));
-
-    // Fit-to-window button
-    viewer.querySelectorAll('.dnd-hv-zoom-btn')[2].addEventListener('click', () => {
-      const s     = openViewers[handout.id];
-      const wW    = imgWrap.clientWidth;
-      const wH    = imgWrap.clientHeight;
-      const iW    = img.naturalWidth  || img.clientWidth;
-      const iH    = img.naturalHeight || img.clientHeight;
-      s.zoom      = Math.min(wW / iW, wH / iH, 1);
-      s.panX      = 0;
-      s.panY      = 0;
-      applyTransform();
-    });
-
-    // Mouse-wheel zoom
-    imgWrap.addEventListener('wheel', (e) => {
-      e.preventDefault();
-      setZoom(e.deltaY < 0 ? +0.15 : -0.15);
-    }, { passive: false });
-
-    // Pan (drag image)
-    let panStart = null;
-    imgWrap.addEventListener('mousedown', (e) => {
-      if (e.button !== 0) return;
-      panStart = { x: e.clientX, y: e.clientY,
-        px: openViewers[handout.id].panX, py: openViewers[handout.id].panY };
-      e.preventDefault();
-    });
-    document.addEventListener('mousemove', (e) => {
-      if (!panStart || !openViewers[handout.id]) return;
-      if (!viewer.contains(imgWrap)) return;
-      const s = openViewers[handout.id];
-      s.panX  = panStart.px + (e.clientX - panStart.x);
-      s.panY  = panStart.py + (e.clientY - panStart.y);
-      applyTransform();
-    });
-    document.addEventListener('mouseup', () => { panStart = null; });
 
     // Drag window by header
     makeDraggableEl(viewer, viewer.querySelector('.dnd-hv-header'));
@@ -217,6 +228,17 @@
     if (tab) tab.remove();
   }
 
+  // Update notes viewer content if open
+  function updateNotesViewer(content) {
+    for (const id of Object.keys(openViewers)) {
+      const state = openViewers[id];
+      const rendered = state.viewer.querySelector('.dnd-notes-rendered');
+      if (rendered) {
+        rendered.innerHTML = renderMarkdown(content);
+      }
+    }
+  }
+
   function makeDraggableEl(el, handle) {
     let sx, sy, sl, st;
     handle.addEventListener('mousedown', (e) => {
@@ -255,6 +277,33 @@
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);
     });
+  }
+
+  // -------------------------------------------------------------------------
+  // Simple Markdown renderer (no external dependency)
+  // -------------------------------------------------------------------------
+  function renderMarkdown(md) {
+    if (!md) return '';
+    let html = md
+      // Escape HTML first
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      // Headers
+      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+      .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+      // Bold / italic
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      // Horizontal rule
+      .replace(/^---$/gm, '<hr/>')
+      // Unordered list items
+      .replace(/^[-*] (.+)$/gm, '<li>$1</li>')
+      // Wrap consecutive <li> in <ul>
+      .replace(/(<li>.*<\/li>\n?)+/g, (m) => `<ul>${m}</ul>`)
+      // Paragraphs: blank line = new paragraph
+      .replace(/\n\n+/g, '</p><p>')
+      .replace(/\n/g, '<br/>');
+    return '<p>' + html + '</p>';
   }
 
   // -------------------------------------------------------------------------
@@ -323,17 +372,37 @@
       applyScene(msg.scene, msg.isCombat);
     }
     if (msg.type === 'WEATHER_CHANGED') applyWeather(msg.preset);
+    if (msg.type === 'NOTES_CHANGED') {
+      updateNotesViewer(msg.content);
+      // Update DM notes editor value if present
+      const editor = document.getElementById('dnd-notes-editor');
+      if (editor) editor.value = msg.content;
+      // Update player notes rendered view
+      const rendered = document.getElementById('dnd-notes-rendered');
+      if (rendered) rendered.innerHTML = renderMarkdown(msg.content);
+    }
   });
 
-
+  // Feature 2: opacity is always 1 or 0, never a float.
+  // Combat always forces 0. Toggle stored in scene.bg_opacity (>0 = on, 0 = off).
   function applyScene(scene, isCombat) {
     combatActive = !!isCombat;
-    const opacity = isCombat ? 0 : (scene.bg_opacity ?? 0.5);
+    const opacity = isCombat ? 0 : (scene.bg_opacity > 0 ? 1 : 0);
     setBackground(scene.background_url || null, opacity);
 
     // Update active-scene indicator in DM panel if open
     document.querySelectorAll('.dnd-scene-row').forEach(row => {
       row.classList.toggle('active', row.dataset.sceneId === scene.id);
+    });
+
+    // Update opacity toggles in scene rows
+    document.querySelectorAll('.dnd-scene-toggle').forEach(btn => {
+      if (btn.dataset.sceneId === scene.id) {
+        const on = scene.bg_opacity > 0;
+        btn.textContent = on ? 'AN' : 'AUS';
+        btn.classList.toggle('on', on);
+        btn.classList.toggle('off', !on);
+      }
     });
   }
 
@@ -513,6 +582,14 @@
       <hr class="dnd-divider" />
       <div id="dnd-handouts-container"></div>
       <hr class="dnd-divider" />
+      <div id="dnd-notes-container">
+        <p class="dnd-section-label">Notizen
+          <button class="dnd-btn-refresh" id="dnd-notes-refresh" title="Notizen neu laden">&#8635;</button>
+        </p>
+        <textarea id="dnd-notes-editor" class="dnd-notes-editor" placeholder="Markdown wird unterstuetzt..."></textarea>
+        <button class="dnd-btn dnd-btn-primary" id="dnd-notes-save" style="margin-top:6px">Speichern &amp; teilen</button>
+      </div>
+      <hr class="dnd-divider" />
       <div id="dnd-music-controls">
         <p class="dnd-section-label">Musik</p>
         <div class="dnd-music-row">
@@ -527,6 +604,11 @@
           <input type="range" id="dnd-weather-volume-slider" class="dnd-opacity-slider"
             min="0" max="1" step="0.05" value="0.3" />
           <span class="dnd-opacity-val" id="dnd-weather-volume-val">30%</span>
+        </div>
+        <div class="dnd-music-row" style="margin-top:8px">
+          <span class="dnd-opacity-label" style="white-space:nowrap">&#127925; Standard</span>
+          <input type="text" id="dnd-default-music" class="dnd-field-input"
+            placeholder="URL zur Standard-Musik (kein Pflichtfeld)" style="flex:1;font-size:11px" />
         </div>
       </div>
       <hr class="dnd-divider" />
@@ -543,14 +625,32 @@
       <button class="dnd-btn dnd-btn-secondary" id="dnd-logout-btn">Ausloggen</button>
     `;
 
-    // Restore saved left offset into slider
-    chrome.storage.local.get('dnd-left-offset', (r) => {
-      const offset = r['dnd-left-offset'] ?? 270;
-      const slider = body.querySelector('#dnd-left-offset-slider');
-      if (slider) {
-        slider.value = offset;
+    // --- Feature 1: Restore saved volumes ---
+    chrome.storage.local.get(['dnd-music-vol', 'dnd-weather-vol', 'dnd-left-offset', 'dnd-default-music'], (r) => {
+      const musicVol   = r['dnd-music-vol']   ?? 0.8;
+      const weatherVol = r['dnd-weather-vol'] ?? 0.3;
+      const offset     = r['dnd-left-offset'] ?? 270;
+      const defMusic   = r['dnd-default-music'] ?? '';
+
+      const volSlider = body.querySelector('#dnd-volume-slider');
+      if (volSlider) {
+        volSlider.value = musicVol;
+        body.querySelector('#dnd-volume-val').textContent = Math.round(musicVol * 100) + '%';
+        chrome.runtime.sendMessage({ type: 'AUDIO_VOLUME', volume: musicVol });
+      }
+      const wVolSlider = body.querySelector('#dnd-weather-volume-slider');
+      if (wVolSlider) {
+        wVolSlider.value = weatherVol;
+        body.querySelector('#dnd-weather-volume-val').textContent = Math.round(weatherVol * 100) + '%';
+        chrome.runtime.sendMessage({ type: 'WEATHER_VOLUME', volume: weatherVol });
+      }
+      const offsetSlider = body.querySelector('#dnd-left-offset-slider');
+      if (offsetSlider) {
+        offsetSlider.value = offset;
         body.querySelector('#dnd-left-offset-val').textContent = offset + 'px';
       }
+      const defInput = body.querySelector('#dnd-default-music');
+      if (defInput) defInput.value = defMusic;
     });
 
     // Left offset slider
@@ -562,22 +662,29 @@
       setLeftOffset(px);
     });
 
-    // Music volume slider
+    // Music volume slider – Feature 1: persist
     const volSlider = body.querySelector('#dnd-volume-slider');
     const volVal    = body.querySelector('#dnd-volume-val');
     volSlider.addEventListener('input', () => {
       const v = parseFloat(volSlider.value);
       volVal.textContent = Math.round(v * 100) + '%';
       chrome.runtime.sendMessage({ type: 'AUDIO_VOLUME', volume: v });
+      chrome.storage.local.set({ 'dnd-music-vol': v });
     });
 
-    // Weather volume slider
+    // Weather volume slider – Feature 1: persist
     const weatherVolSlider = body.querySelector('#dnd-weather-volume-slider');
     const weatherVolVal    = body.querySelector('#dnd-weather-volume-val');
     weatherVolSlider.addEventListener('input', () => {
       const v = parseFloat(weatherVolSlider.value);
       weatherVolVal.textContent = Math.round(v * 100) + '%';
       chrome.runtime.sendMessage({ type: 'WEATHER_VOLUME', volume: v });
+      chrome.storage.local.set({ 'dnd-weather-vol': v });
+    });
+
+    // Default music input – Feature 5: persist
+    body.querySelector('#dnd-default-music').addEventListener('change', function () {
+      chrome.storage.local.set({ 'dnd-default-music': this.value.trim() });
     });
 
     body.querySelector('#dnd-music-play').addEventListener('click', () => {
@@ -587,8 +694,8 @@
       const scene     = (window._dndScenes || []).find(s => s.id === sceneId);
       if (!scene) return;
       const isCombat  = body.querySelector('#dnd-initiative-btn')?.dataset.active === 'true';
-      const url       = isCombat ? (scene.combat_url || scene.ambient_url) : scene.ambient_url;
       const vol       = parseFloat(body.querySelector('#dnd-volume-slider')?.value ?? 0.8);
+      const url       = resolveAudioUrl(scene, isCombat);
       if (url) chrome.runtime.sendMessage({ type: 'AUDIO_PLAY', url, volume: vol });
     });
 
@@ -603,15 +710,39 @@
       renderLogin();
     });
 
-    const [scenesResp, sessionResp, weatherResp, handoutsResp] = await Promise.all([
+    const [scenesResp, sessionResp, weatherResp, handoutsResp, notesResp] = await Promise.all([
       chrome.runtime.sendMessage({ type: 'SCENES_LIST', campaignId: profile.campaign_id }),
       chrome.runtime.sendMessage({ type: 'SESSION_GET', campaignId: profile.campaign_id }),
       chrome.runtime.sendMessage({ type: 'WEATHER_PRESETS_LIST', campaignId: profile.campaign_id }),
       chrome.runtime.sendMessage({ type: 'HANDOUTS_LIST', campaignId: profile.campaign_id }),
+      chrome.runtime.sendMessage({ type: 'NOTES_GET', campaignId: profile.campaign_id }),
     ]);
 
     const session        = sessionResp.session;
     const weatherPresets = weatherResp.presets || [];
+
+    // --- Notes DM editor ---
+    const notesEditor = body.querySelector('#dnd-notes-editor');
+    notesEditor.value = notesResp.content || '';
+
+    body.querySelector('#dnd-notes-save').addEventListener('click', async () => {
+      const btn = body.querySelector('#dnd-notes-save');
+      btn.disabled = true;
+      btn.textContent = 'Speichern...';
+      await chrome.runtime.sendMessage({
+        type: 'NOTES_SAVE',
+        campaignId: profile.campaign_id,
+        content: notesEditor.value,
+      });
+      btn.disabled = false;
+      btn.textContent = 'Speichern & teilen';
+    });
+
+    // Notes refresh
+    body.querySelector('#dnd-notes-refresh').addEventListener('click', async () => {
+      const r = await chrome.runtime.sendMessage({ type: 'NOTES_GET', campaignId: profile.campaign_id });
+      notesEditor.value = r.content || '';
+    });
 
     // Wire up initiative button
     const initBtn = body.querySelector('#dnd-initiative-btn');
@@ -633,7 +764,7 @@
         if (scene) {
           applyScene(scene, isCombatActive);
           const vol = parseFloat(body.querySelector('#dnd-volume-slider')?.value ?? 0.8);
-          const url = isCombatActive ? (scene.combat_url || scene.ambient_url) : scene.ambient_url;
+          const url = resolveAudioUrl(scene, isCombatActive);
           if (url) chrome.runtime.sendMessage({ type: 'AUDIO_PLAY', url, volume: vol });
           else     chrome.runtime.sendMessage({ type: 'AUDIO_STOP' });
           // Initiative beendet: Wetter der aktiven Szene wieder anzeigen
@@ -649,14 +780,36 @@
     });
 
     window._dndScenes = scenesResp.scenes || [];
+
+    // --- Feature 3: Refresh buttons ---
+    function doRefreshScenes() {
+      chrome.runtime.sendMessage({ type: 'SCENES_LIST', campaignId: profile.campaign_id }).then(r => {
+        window._dndScenes = r.scenes || [];
+        renderSceneButtons(
+          window._dndScenes,
+          body.querySelector('.dnd-scene-row.active')?.dataset.sceneId || session?.active_scene_id || null,
+          profile.campaign_id,
+          combatActive,
+          weatherPresets,
+        );
+      });
+    }
+
+    function doRefreshHandouts() {
+      chrome.runtime.sendMessage({ type: 'HANDOUTS_LIST', campaignId: profile.campaign_id }).then(r => {
+        renderHandouts(r.handouts || []);
+      });
+    }
+
     renderSceneButtons(
       window._dndScenes,
       session?.active_scene_id || null,
       profile.campaign_id,
       session?.is_combat ?? false,
-      weatherPresets
+      weatherPresets,
+      doRefreshScenes,
     );
-    renderHandouts(handoutsResp.handouts || []);
+    renderHandouts(handoutsResp.handouts || [], doRefreshHandouts);
   }
 
   function updateInitiativeBtn(btn, active) {
@@ -665,22 +818,57 @@
     btn.classList.toggle('combat-active', active);
   }
 
-  function renderSceneButtons(scenes, activeSceneId, campaignId, isCombat, weatherPresets = []) {
+  // Feature 5: resolve audio URL with fallback to default music
+  function resolveAudioUrl(scene, isCombat) {
+    const url = isCombat
+      ? (scene.combat_url || scene.ambient_url)
+      : scene.ambient_url;
+    if (url) return url;
+    // Fallback: read saved default music URL from storage (synchronously cached)
+    return window._dndDefaultMusic || null;
+  }
+
+  // Cache default music URL on load
+  chrome.storage.local.get('dnd-default-music', (r) => {
+    window._dndDefaultMusic = r['dnd-default-music'] || null;
+  });
+  // Keep cache updated when DM changes it
+  chrome.storage.onChanged.addListener((changes) => {
+    if (changes['dnd-default-music']) {
+      window._dndDefaultMusic = changes['dnd-default-music'].newValue || null;
+    }
+  });
+
+  function renderSceneButtons(scenes, activeSceneId, campaignId, isCombat, weatherPresets = [], onRefresh) {
     const container = document.getElementById('dnd-scenes-container');
     if (!container) return;
 
     if (!scenes.length) {
       container.innerHTML = `
+        <p class="dnd-section-label">Szenen
+          ${onRefresh ? `<button class="dnd-btn-refresh" id="dnd-scenes-refresh" title="Szenen aktualisieren">&#8635;</button>` : ''}
+        </p>
         <p class="dnd-placeholder">Noch keine Szenen. Lege Ordner in<br><code>content/scenes/</code> an und starte den Watcher.</p>
       `;
+      if (onRefresh) {
+        container.querySelector('#dnd-scenes-refresh')?.addEventListener('click', onRefresh);
+      }
       return;
     }
 
-    container.innerHTML = `<p class="dnd-section-label">Szene auswaehlen</p>`;
+    container.innerHTML = `
+      <p class="dnd-section-label">Szene auswaehlen
+        ${onRefresh ? `<button class="dnd-btn-refresh" id="dnd-scenes-refresh" title="Szenen aktualisieren">&#8635;</button>` : ''}
+      </p>
+    `;
+
+    if (onRefresh) {
+      container.querySelector('#dnd-scenes-refresh')?.addEventListener('click', onRefresh);
+    }
 
     scenes.forEach(scene => {
       const isActive = scene.id === activeSceneId;
-      const opacity  = scene.bg_opacity ?? (scene.is_combat ? 0.25 : 0.5);
+      const bgOn     = scene.bg_opacity > 0; // Feature 2: boolean
 
       const wrap = document.createElement('div');
       wrap.className = 'dnd-scene-row' + (isActive ? ' active' : '');
@@ -696,10 +884,10 @@
           ${scene.is_combat ? '&#x2694;' : '&#x1F3D5;'} ${esc(scene.name)}
         </button>
         <div class="dnd-opacity-row">
-          <span class="dnd-opacity-label">Helligkeit</span>
-          <input type="range" class="dnd-opacity-slider" min="0" max="1" step="0.05"
-            value="${opacity}" data-scene-id="${scene.id}" />
-          <span class="dnd-opacity-val">${Math.round(opacity * 100)}%</span>
+          <span class="dnd-opacity-label">Hintergrund</span>
+          <button class="dnd-scene-toggle ${bgOn ? 'on' : 'off'}" data-scene-id="${scene.id}">
+            ${bgOn ? 'AN' : 'AUS'}
+          </button>
         </div>
         ${weatherPresets.length ? `
         <div class="dnd-opacity-row">
@@ -727,7 +915,7 @@
 
         if (combat) {
           // Initiative läuft: nur Sound wechseln, Hintergrund + Wetter bleiben unsichtbar
-          const audioUrl = scene.combat_url || scene.ambient_url;
+          const audioUrl = resolveAudioUrl(scene, true);
           if (audioUrl) chrome.runtime.sendMessage({ type: 'AUDIO_PLAY', url: audioUrl, volume: vol });
           else          chrome.runtime.sendMessage({ type: 'AUDIO_STOP' });
           // Wetter in DB persistieren ohne Broadcast (wird beim Initiative-Ende aktiv)
@@ -735,7 +923,7 @@
           chrome.runtime.sendMessage({ type: 'WEATHER_SET', preset, sceneId: scene.id });
         } else {
           applyScene(scene, false);
-          const audioUrl = scene.ambient_url;
+          const audioUrl = resolveAudioUrl(scene, false);
           if (audioUrl) chrome.runtime.sendMessage({ type: 'AUDIO_PLAY', url: audioUrl, volume: vol });
           else          chrome.runtime.sendMessage({ type: 'AUDIO_STOP' });
           // Wetter der neuen Szene anwenden
@@ -746,25 +934,23 @@
         }
       });
 
-      // Opacity slider - live preview
-      const slider  = wrap.querySelector('.dnd-opacity-slider');
-      const valSpan = wrap.querySelector('.dnd-opacity-val');
-
-      slider.addEventListener('input', () => {
-        const v = parseFloat(slider.value);
-        valSpan.textContent = Math.round(v * 100) + '%';
-        // Live preview only if this is the active scene
-        if (wrap.classList.contains('active')) {
-          bgOverlay.style.setProperty('--bg-opacity', v);
+      // Feature 2: Opacity toggle (AN/AUS)
+      const toggleEl = wrap.querySelector('.dnd-scene-toggle');
+      toggleEl.addEventListener('click', async () => {
+        const newOn      = toggleEl.classList.contains('off'); // flipping
+        const newOpacity = newOn ? 1 : 0;
+        scene.bg_opacity = newOpacity;
+        toggleEl.textContent = newOn ? 'AN' : 'AUS';
+        toggleEl.classList.toggle('on', newOn);
+        toggleEl.classList.toggle('off', !newOn);
+        // Live update if active scene (and not combat)
+        if (wrap.classList.contains('active') && !combatActive) {
+          bgOverlay.style.setProperty('--bg-opacity', newOpacity);
         }
-        scene.bg_opacity = v;
-      });
-
-      slider.addEventListener('change', async () => {
         await chrome.runtime.sendMessage({
           type: 'SCENE_UPDATE_OPACITY',
           sceneId: scene.id,
-          opacity: parseFloat(slider.value),
+          opacity: newOpacity,
         });
       });
 
@@ -792,19 +978,30 @@
   }
 
   // -- renderHandouts --------------------------------------------------------
-  function renderHandouts(handouts) {
+  function renderHandouts(handouts, onRefresh) {
     const container = document.getElementById('dnd-handouts-container');
     if (!container) return;
 
     if (!handouts.length) {
       container.innerHTML = `
-        <p class="dnd-section-label">Handouts</p>
+        <p class="dnd-section-label">Handouts
+          ${onRefresh ? `<button class="dnd-btn-refresh" id="dnd-handouts-refresh" title="Handouts aktualisieren">&#8635;</button>` : ''}
+        </p>
         <p class="dnd-placeholder">Noch keine Handouts vorhanden.</p>
       `;
+      if (onRefresh) {
+        container.querySelector('#dnd-handouts-refresh')?.addEventListener('click', onRefresh);
+      }
       return;
     }
 
-    container.innerHTML = `<p class="dnd-section-label">Handouts</p>`;
+    container.innerHTML = `<p class="dnd-section-label">Handouts
+      ${onRefresh ? `<button class="dnd-btn-refresh" id="dnd-handouts-refresh" title="Handouts aktualisieren">&#8635;</button>` : ''}
+    </p>`;
+
+    if (onRefresh) {
+      container.querySelector('#dnd-handouts-refresh')?.addEventListener('click', onRefresh);
+    }
 
     handouts.forEach(h => {
       const row = document.createElement('div');
@@ -825,6 +1022,13 @@
       </div>
       <hr class="dnd-divider" />
       <div id="dnd-handouts-container"></div>
+      <hr class="dnd-divider" />
+      <div id="dnd-player-notes-container">
+        <p class="dnd-section-label">Notizen
+          <button class="dnd-btn-refresh" id="dnd-player-notes-refresh" title="Notizen neu laden">&#8635;</button>
+        </p>
+        <div class="dnd-notes-rendered" id="dnd-notes-rendered"></div>
+      </div>
       <hr class="dnd-divider" />
       <div>
         <p class="dnd-section-label">Lautstaerke</p>
@@ -855,21 +1059,55 @@
       <button class="dnd-btn dnd-btn-secondary" id="dnd-logout-btn">Ausloggen</button>
     `;
 
-    // Load shared handouts for player
-    const handoutsResp = await chrome.runtime.sendMessage({
-      type: 'HANDOUTS_LIST', campaignId: profile.campaign_id,
-    });
-    renderHandouts(handoutsResp.handouts || []);
+    // Feature 1: Restore saved volumes for player
+    chrome.storage.local.get(['dnd-music-vol', 'dnd-weather-vol', 'dnd-left-offset'], (r) => {
+      const musicVol   = r['dnd-music-vol']   ?? 0.8;
+      const weatherVol = r['dnd-weather-vol'] ?? 0.3;
+      const offset     = r['dnd-left-offset'] ?? 270;
 
-    // Restore + wire player offset slider
-    chrome.storage.local.get('dnd-left-offset', (r) => {
-      const offset = r['dnd-left-offset'] ?? 270;
-      const slider = body.querySelector('#dnd-player-offset-slider');
-      if (slider) {
-        slider.value = offset;
+      const musicSlider = body.querySelector('#dnd-player-music-vol');
+      if (musicSlider) {
+        musicSlider.value = musicVol;
+        body.querySelector('#dnd-player-music-vol-val').textContent = Math.round(musicVol * 100) + '%';
+        chrome.runtime.sendMessage({ type: 'AUDIO_VOLUME', volume: musicVol });
+      }
+      const weatherSlider = body.querySelector('#dnd-player-weather-vol');
+      if (weatherSlider) {
+        weatherSlider.value = weatherVol;
+        body.querySelector('#dnd-player-weather-vol-val').textContent = Math.round(weatherVol * 100) + '%';
+        chrome.runtime.sendMessage({ type: 'WEATHER_VOLUME', volume: weatherVol });
+      }
+      const offsetSlider = body.querySelector('#dnd-player-offset-slider');
+      if (offsetSlider) {
+        offsetSlider.value = offset;
         body.querySelector('#dnd-player-offset-val').textContent = offset + 'px';
       }
     });
+
+    // Load shared handouts + notes for player
+    const [handoutsResp, notesResp] = await Promise.all([
+      chrome.runtime.sendMessage({ type: 'HANDOUTS_LIST', campaignId: profile.campaign_id }),
+      chrome.runtime.sendMessage({ type: 'NOTES_GET', campaignId: profile.campaign_id }),
+    ]);
+
+    function doRefreshHandouts() {
+      chrome.runtime.sendMessage({ type: 'HANDOUTS_LIST', campaignId: profile.campaign_id }).then(r => {
+        renderHandouts(r.handouts || [], doRefreshHandouts);
+      });
+    }
+    renderHandouts(handoutsResp.handouts || [], doRefreshHandouts);
+
+    // Render notes
+    const notesRendered = body.querySelector('#dnd-notes-rendered');
+    if (notesRendered) notesRendered.innerHTML = renderMarkdown(notesResp.content || '');
+
+    // Refresh notes
+    body.querySelector('#dnd-player-notes-refresh').addEventListener('click', async () => {
+      const r = await chrome.runtime.sendMessage({ type: 'NOTES_GET', campaignId: profile.campaign_id });
+      if (notesRendered) notesRendered.innerHTML = renderMarkdown(r.content || '');
+    });
+
+    // Restore + wire player offset slider
     body.querySelector('#dnd-player-offset-slider').addEventListener('input', function () {
       const px = parseInt(this.value);
       body.querySelector('#dnd-player-offset-val').textContent = px + 'px';
@@ -880,12 +1118,14 @@
       const v = parseFloat(this.value);
       body.querySelector('#dnd-player-music-vol-val').textContent = Math.round(v * 100) + '%';
       chrome.runtime.sendMessage({ type: 'AUDIO_VOLUME', volume: v });
+      chrome.storage.local.set({ 'dnd-music-vol': v }); // Feature 1
     });
 
     body.querySelector('#dnd-player-weather-vol').addEventListener('input', function () {
       const v = parseFloat(this.value);
       body.querySelector('#dnd-player-weather-vol-val').textContent = Math.round(v * 100) + '%';
       chrome.runtime.sendMessage({ type: 'WEATHER_VOLUME', volume: v });
+      chrome.storage.local.set({ 'dnd-weather-vol': v }); // Feature 1
     });
 
     body.querySelector('#dnd-logout-btn').addEventListener('click', async () => {

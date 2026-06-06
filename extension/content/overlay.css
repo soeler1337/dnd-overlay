@@ -116,6 +116,24 @@
   letter-spacing: 0.5px;
 }
 
+.dnd-field-input {
+  all: unset;
+  display: block;
+  background: #0d0a04;
+  border: 1px solid #4a3a20;
+  border-radius: 4px;
+  padding: 4px 8px;
+  color: #e8dcc8;
+  font-size: 12px;
+  box-sizing: border-box;
+  transition: border-color 0.15s;
+}
+
+.dnd-field-input:focus {
+  border-color: #c8a45a;
+  outline: none;
+}
+
 .dnd-account-select {
   all: unset;
   display: block;
@@ -688,6 +706,97 @@
 
 .dnd-handout-share-btn.shared {
   border-color: #c8a45a66;
+  color: #c8a45a;
+}
+
+/* Opacity toggle (AN/AUS per Szene) */
+.dnd-scene-toggle {
+  all: unset;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 10px;
+  border: 1px solid #4a3a20;
+  color: #8a7a60;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.dnd-scene-toggle.on {
+  background: #1a3a0e;
+  border-color: #5acc40;
+  color: #7acc60;
+}
+
+.dnd-scene-toggle.off {
+  background: #2c0a0a;
+  border-color: #6a2020;
+  color: #a06060;
+}
+
+/* Notizen / Markdown */
+.dnd-notes-editor {
+  all: unset;
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  background: #0d0a04;
+  border: 1px solid #4a3a20;
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: #e8dcc8;
+  font-family: monospace;
+  min-height: 120px;
+  resize: vertical;
+  line-height: 1.5;
+  transition: border-color 0.15s;
+}
+
+.dnd-notes-editor:focus {
+  border-color: #c8a45a;
+  outline: none;
+}
+
+.dnd-notes-rendered {
+  font-size: 13px;
+  color: #e8dcc8;
+  line-height: 1.6;
+}
+
+.dnd-notes-rendered h1 { font-size: 16px; color: #c8a45a; margin: 8px 0 4px; }
+.dnd-notes-rendered h2 { font-size: 14px; color: #c8a45a; margin: 8px 0 4px; }
+.dnd-notes-rendered h3 { font-size: 13px; color: #c8a45a; margin: 6px 0 2px; }
+.dnd-notes-rendered p  { margin: 4px 0; }
+.dnd-notes-rendered ul { margin: 4px 0; padding-left: 18px; }
+.dnd-notes-rendered li { margin: 2px 0; }
+.dnd-notes-rendered hr { border: none; border-top: 1px solid #c8a45a33; margin: 8px 0; }
+.dnd-notes-rendered strong { color: #c8a45a; }
+.dnd-notes-rendered em { color: #a09070; font-style: italic; }
+
+/* Handout-Viewer für Notizen */
+.dnd-hv-notes-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 16px;
+}
+
+/* Refresh-Button */
+.dnd-btn-refresh {
+  all: unset;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 6px;
+  border: 1px solid #4a3a20;
+  border-radius: 4px;
+  color: #8a7a60;
+  transition: border-color 0.1s, color 0.1s;
+  float: right;
+}
+
+.dnd-btn-refresh:hover {
+  border-color: #c8a45a;
   color: #c8a45a;
 }
 

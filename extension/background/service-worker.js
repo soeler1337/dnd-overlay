@@ -99,6 +99,14 @@ function subscribeToSession(sessionId, campaignId) {
         broadcastToTabs({ type: 'SCENE_CHANGED', scene: payload.new });
       }
     })
+    .on('postgres_changes', {
+      event:  '*',
+      schema: 'public',
+      table:  'campaign_notes',
+      filter: 'campaign_id=eq.' + campaignId,
+    }, (payload) => {
+      if (payload.new) broadcastToTabs({ type: 'NOTES_CHANGED', content: payload.new.content ?? '' });
+    })
     .subscribe();
 
   // Load current active scene on startup
@@ -260,6 +268,25 @@ async function handleMessage(msg) {
       return { ok: true };
     }
 
+    case 'NOTES_GET': {
+      const { data } = await sb
+        .from('campaign_notes')
+        .select('content')
+        .eq('campaign_id', msg.campaignId)
+        .single();
+      return { content: data?.content ?? '' };
+    }
+
+    case 'NOTES_SAVE': {
+      const { error } = await sb
+        .from('campaign_notes')
+        .upsert({ campaign_id: msg.campaignId, content: msg.content, updated_at: new Date().toISOString() },
+          { onConflict: 'campaign_id' });
+      if (error) throw error;
+      broadcastToTabs({ type: 'NOTES_CHANGED', content: msg.content });
+      return { ok: true };
+    }
+
     default:
       console.warn('[SW] unknown message type:', msg.type);
       return { error: 'unknown message type' };
@@ -280,10 +307,16 @@ async function resolveCampaignId(gameId, profile) {
   return profile?.campaign_id || null;
 }
 
-function playSceneAudio(scene, isCombat) {
+async function playSceneAudio(scene, isCombat) {
   const url = isCombat ? (scene.combat_url || scene.ambient_url) : scene.ambient_url;
-  if (url) sendAudio({ type: 'PLAY_AUDIO', url });
-  else     sendAudio({ type: 'STOP_AUDIO' });
+  // Feature 5: fall back to persisted default music URL if scene has none
+  let audioUrl = url;
+  if (!audioUrl) {
+    const stored = await new Promise(r => chrome.storage.local.get('dnd-default-music', d => r(d['dnd-default-music'] || null)));
+    audioUrl = stored;
+  }
+  if (audioUrl) sendAudio({ type: 'PLAY_MUSIC', url: audioUrl });
+  else          sendAudio({ type: 'STOP_MUSIC' });
 }
 
 async function fetchProfile(userId) {
