@@ -1,0 +1,51 @@
+{
+  "manifest_version": 3,
+  "name": "DnD Overlay",
+  "version": "0.1.0",
+  "description": "DM-controlled overlay for DnD Beyond game sessions.",
+
+  "permissions": [
+    "storage",
+    "offscreen"
+  ],
+
+  "host_permissions": [
+    "https://www.dndbeyond.com/games/*"
+  ],
+
+  "background": {
+    "service_worker": "background/service-worker.js",
+    "type": "module"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["https://www.dndbeyond.com/games/*"],
+      "js": ["content/overlay.js"],
+      "css": ["content/overlay.css"],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16":  "assets/icons/icon16.png",
+      "48":  "assets/icons/icon48.png",
+      "128": "assets/icons/icon128.png"
+    }
+  },
+
+  "icons": {
+    "16":  "assets/icons/icon16.png",
+    "48":  "assets/icons/icon48.png",
+    "128": "assets/icons/icon128.png"
+  },
+
+  "web_accessible_resources": [
+    {
+      "resources": ["offscreen/offscreen.html", "panels/*.js", "lib/*.js"],
+      "matches": ["https://www.dndbeyond.com/games/*"]
+    }
+  ]
+}

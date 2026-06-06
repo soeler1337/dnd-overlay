@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DnD Overlay</title>
+  <style>
+    body {
+      width: 220px;
+      padding: 14px;
+      background: #1a1209;
+      color: #e8dcc8;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      font-size: 13px;
+      margin: 0;
+    }
+    h2 {
+      color: #c8a45a;
+      font-size: 15px;
+      margin: 0 0 10px;
+    }
+    p {
+      margin: 0 0 12px;
+      color: #8a7a60;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    #status {
+      font-size: 11px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <h2>DnD Overlay</h2>
+  <p>Oeffne eine DnD Beyond Spielsitzung:<br>
+    <code>dndbeyond.com/games/[ID]</code>
+  </p>
+  <p>Das Overlay erscheint automatisch als Button unten rechts.</p>
+  <div id="status">Verbindung wird geprueft...</div>
+  <script src="popup.js"></script>
+</body>
+</html>
