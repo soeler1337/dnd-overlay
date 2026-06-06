@@ -95,43 +95,35 @@ async function syncScene(sceneDir) {
     meta.bg_opacity = meta.is_combat ? 0.25 : 0.5;
   }
 
-  // Background image (root level)
-  const bgFile      = files.find(f => isImage(f) && !f.startsWith('overlay'));
-  // Animated overlay GIF (root level, filename starts with "overlay")
-  const overlayFile = files.find(f => f.toLowerCase().startsWith('overlay') && isImage(f));
+  // Each asset type lives in its own subfolder - first matching file wins.
+  function firstFileIn(subdir, matchFn) {
+    const dir = path.join(sceneDir, subdir);
+    if (!fs.existsSync(dir)) return null;
+    return fs.readdirSync(dir).find(f => matchFn(f)) || null;
+  }
 
-  // Ambient music: ambient/ subfolder
-  const ambientDir  = path.join(sceneDir, 'ambient');
-  const ambientFile = fs.existsSync(ambientDir)
-    ? fs.readdirSync(ambientDir).find(isAudio)
-    : null;
+  const bgFile      = firstFileIn('background', isImage);
+  const overlayFile = firstFileIn('overlay',    isImage);
+  const ambientFile = firstFileIn('ambient',    isAudio);
+  const combatFile  = firstFileIn('combat',     isAudio);
 
-  // Combat music: combat/ subfolder
-  const combatDir   = path.join(sceneDir, 'combat');
-  const combatFile  = fs.existsSync(combatDir)
-    ? fs.readdirSync(combatDir).find(isAudio)
-    : null;
-
-  let bgUrl      = null;
-  let overlayUrl = null;
-  let ambientUrl = null;
-  let combatUrl  = null;
+  let bgUrl = null, overlayUrl = null, ambientUrl = null, combatUrl = null;
 
   if (bgFile) {
-    console.log(`[Watcher] Hintergrund: ${folderName}/${bgFile}`);
-    bgUrl = await uploadFile('backgrounds', `${CAMPAIGN_ID}/${folderName}/${bgFile}`, path.join(sceneDir, bgFile));
+    console.log(`[Watcher] Hintergrund: ${folderName}/background/${bgFile}`);
+    bgUrl = await uploadFile('backgrounds', `${CAMPAIGN_ID}/${folderName}/${bgFile}`, path.join(sceneDir, 'background', bgFile));
   }
   if (overlayFile) {
-    console.log(`[Watcher] Overlay-GIF: ${folderName}/${overlayFile}`);
-    overlayUrl = await uploadFile('backgrounds', `${CAMPAIGN_ID}/${folderName}/${overlayFile}`, path.join(sceneDir, overlayFile));
+    console.log(`[Watcher] Overlay: ${folderName}/overlay/${overlayFile}`);
+    overlayUrl = await uploadFile('backgrounds', `${CAMPAIGN_ID}/${folderName}/overlay_${overlayFile}`, path.join(sceneDir, 'overlay', overlayFile));
   }
   if (ambientFile) {
     console.log(`[Watcher] Ambient: ${folderName}/ambient/${ambientFile}`);
-    ambientUrl = await uploadFile('music', `${CAMPAIGN_ID}/${folderName}/ambient/${ambientFile}`, path.join(ambientDir, ambientFile));
+    ambientUrl = await uploadFile('music', `${CAMPAIGN_ID}/${folderName}/ambient/${ambientFile}`, path.join(sceneDir, 'ambient', ambientFile));
   }
   if (combatFile) {
     console.log(`[Watcher] Combat: ${folderName}/combat/${combatFile}`);
-    combatUrl = await uploadFile('music', `${CAMPAIGN_ID}/${folderName}/combat/${combatFile}`, path.join(combatDir, combatFile));
+    combatUrl = await uploadFile('music', `${CAMPAIGN_ID}/${folderName}/combat/${combatFile}`, path.join(sceneDir, 'combat', combatFile));
   }
 
   const { error } = await sb.from('scenes').upsert({
@@ -223,10 +215,10 @@ function startWatcher() {
       if (!fs.existsSync(full)) return; // deleted - ignore for now
       try {
         if (baseDir === scenesDir) {
-          // filename might be "scenefolder" or "scenefolder/file"
+          // filename may be "scene/subfolder/file" - always take top-level folder
           const parts  = filename.split(path.sep);
           const sceneD = path.join(scenesDir, parts[0]);
-          if (fs.statSync(sceneD).isDirectory()) await syncScene(sceneD);
+          if (fs.existsSync(sceneD) && fs.statSync(sceneD).isDirectory()) await syncScene(sceneD);
         } else {
           await syncHandout(full);
         }
