@@ -80,7 +80,22 @@ async function uploadFile(bucket, storagePath, localPath) {
 // -------------------------------------------------------------------------
 // Sync a single scene folder
 // -------------------------------------------------------------------------
+const SCENE_SUBDIRS = ['background', 'overlay', 'ambient', 'combat'];
+
+function ensureSceneFolders(sceneDir) {
+  let created = false;
+  for (const sub of SCENE_SUBDIRS) {
+    const dir = path.join(sceneDir, sub);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+      created = true;
+    }
+  }
+  if (created) console.log(`[Watcher] Unterordner erstellt in: ${path.basename(sceneDir)}`);
+}
+
 async function syncScene(sceneDir) {
+  ensureSceneFolders(sceneDir);
   const folderName = path.basename(sceneDir);
   const files      = fs.readdirSync(sceneDir);
 
@@ -179,6 +194,7 @@ async function fullSync() {
     for (const entry of fs.readdirSync(scenesDir)) {
       const full = path.join(scenesDir, entry);
       if (fs.statSync(full).isDirectory()) {
+        ensureSceneFolders(full);
         await syncScene(full).catch(e => console.error('[Watcher] Fehler Szene:', e.message));
       }
     }
