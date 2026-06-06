@@ -150,7 +150,7 @@
       });
 
       if (resp.error) {
-        showErr(errEl, btnEl, 'Benutzername oder Passwort falsch.');
+        showErr(errEl, btnEl, resp.error);
         return;
       }
 

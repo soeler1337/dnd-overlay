@@ -4,7 +4,7 @@
 importScripts('../lib/supabase.umd.js');
 
 const SUPABASE_URL     = 'https://oeypwacjlbgpcwobvxix.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_6YqvCwUhgg1qG_vhZFqhXw_UmTm-YdA';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9leXB3YWNqbGJncGN3b2J2eGl4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA3NDM2MjUsImV4cCI6MjA5NjMxOTYyNX0.Z1NEjmnE_OHdOzlQ1ChFfbU6epVtVzCDmLQu86dvjJ0';
 
 // chrome.storage.local adapter so sessions survive SW restarts.
 const storageAdapter = {
