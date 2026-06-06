@@ -40,6 +40,12 @@
   bgOverlay.id = 'dnd-bg-overlay';
   document.body.appendChild(bgOverlay);
 
+  // Restore saved left offset (protects character sheet sidebar)
+  chrome.storage.local.get('dnd-left-offset', (r) => {
+    const offset = r['dnd-left-offset'] ?? 270;
+    bgOverlay.style.left = offset + 'px';
+  });
+
   function setBackground(url, opacity) {
     if (url) {
       bgOverlay.style.backgroundImage = `url(${JSON.stringify(url)})`;
@@ -48,6 +54,11 @@
     } else {
       bgOverlay.classList.remove('active');
     }
+  }
+
+  function setLeftOffset(px) {
+    bgOverlay.style.left = px + 'px';
+    chrome.storage.local.set({ 'dnd-left-offset': px });
   }
 
   // -------------------------------------------------------------------------
@@ -209,8 +220,37 @@
         </div>
       </div>
       <hr class="dnd-divider" />
+      <div id="dnd-layout-controls">
+        <p class="dnd-section-label">Layout</p>
+        <div class="dnd-music-row">
+          <span class="dnd-opacity-label">Char-Sheet<br>Schutz</span>
+          <input type="range" id="dnd-left-offset-slider" class="dnd-opacity-slider"
+            min="0" max="600" step="10" value="270" />
+          <span class="dnd-opacity-val" id="dnd-left-offset-val">270px</span>
+        </div>
+      </div>
+      <hr class="dnd-divider" />
       <button class="dnd-btn dnd-btn-secondary" id="dnd-logout-btn">Ausloggen</button>
     `;
+
+    // Restore saved left offset into slider
+    chrome.storage.local.get('dnd-left-offset', (r) => {
+      const offset = r['dnd-left-offset'] ?? 270;
+      const slider = body.querySelector('#dnd-left-offset-slider');
+      if (slider) {
+        slider.value = offset;
+        body.querySelector('#dnd-left-offset-val').textContent = offset + 'px';
+      }
+    });
+
+    // Left offset slider
+    const offsetSlider = body.querySelector('#dnd-left-offset-slider');
+    const offsetVal    = body.querySelector('#dnd-left-offset-val');
+    offsetSlider.addEventListener('input', () => {
+      const px = parseInt(offsetSlider.value);
+      offsetVal.textContent = px + 'px';
+      setLeftOffset(px);
+    });
 
     // Volume slider
     const volSlider = body.querySelector('#dnd-volume-slider');
