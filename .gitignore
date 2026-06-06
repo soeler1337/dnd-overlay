@@ -7,13 +7,6 @@ extension/lib/config.js
 # Dependencies
 watcher/node_modules/
 
-# Content-Assets (Bilder/Audio - DM-lokal, nicht im Repo)
-*.jpg
-*.jpeg
-*.png
-*.webp
-*.gif
-*.mp3
-*.ogg
-*.wav
-*.m4a
+# DM-lokal: Watcher und Content bleiben auf deinem Rechner
+watcher/
+content/
