@@ -1,0 +1,7 @@
+[
+  { "label": "DM – Soeler",            "username": "soeler",  "password": "soeler"  },
+  { "label": "Piesen  – Phandalin SKF", "username": "piesen",  "password": "piesen"  },
+  { "label": "Larum   – Phandalin SKF", "username": "larum",   "password": "larum"   },
+  { "label": "Castiel – Phandalin SKF", "username": "castiel", "password": "castiel" },
+  { "label": "Amarion – Phandalin SKF", "username": "amarion", "password": "amarion" }
+]

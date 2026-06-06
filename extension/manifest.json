@@ -43,7 +43,7 @@
 
   "web_accessible_resources": [
     {
-      "resources": ["offscreen/offscreen.html", "panels/*.js", "lib/*.js"],
+      "resources": ["offscreen/offscreen.html", "panels/*.js", "lib/*.js", "accounts.json"],
       "matches": ["<all_urls>"]
     }
   ]

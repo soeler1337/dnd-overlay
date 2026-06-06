@@ -95,7 +95,6 @@ function subscribeToSession(sessionId, campaignId) {
       table:  'scenes',
       filter: 'campaign_id=eq.' + campaignId,
     }, (payload) => {
-      // Only broadcast if the changed scene is currently active
       if (payload.new.id === activeSceneId) {
         broadcastToTabs({ type: 'SCENE_CHANGED', scene: payload.new });
       }
@@ -130,10 +129,12 @@ async function handleMessage(msg) {
       const { data, error } = await sb.auth.getSession();
       if (error) throw error;
       if (!data.session) return { session: null, profile: null };
-      const profile = await fetchProfile(data.session.user.id);
-      if (profile?.campaign_id) {
-        const session = await fetchSession(profile.campaign_id);
-        if (session) subscribeToSession(session.id, profile.campaign_id);
+      const profile    = await fetchProfile(data.session.user.id);
+      const campaignId = await resolveCampaignId(msg.gameId, profile);
+      if (campaignId) {
+        profile.campaign_id = campaignId;
+        const session = await fetchSession(campaignId);
+        if (session) subscribeToSession(session.id, campaignId);
       }
       return { session: data.session, profile };
     }
@@ -143,10 +144,12 @@ async function handleMessage(msg) {
         email: msg.email, password: msg.password,
       });
       if (error) throw error;
-      const profile = await fetchProfile(data.user.id);
-      if (profile?.campaign_id) {
-        const session = await fetchSession(profile.campaign_id);
-        if (session) subscribeToSession(session.id, profile.campaign_id);
+      const profile    = await fetchProfile(data.user.id);
+      const campaignId = await resolveCampaignId(msg.gameId, profile);
+      if (campaignId) {
+        profile.campaign_id = campaignId;
+        const session = await fetchSession(campaignId);
+        if (session) subscribeToSession(session.id, campaignId);
       }
       return { session: data.session, profile };
     }
@@ -186,16 +189,58 @@ async function handleMessage(msg) {
 
     case 'AUDIO_PLAY':
       if (!msg.url) return { ok: true };
-      await sendAudio({ type: 'PLAY_AUDIO', url: msg.url, volume: msg.volume ?? 0.8 });
+      await sendAudio({ type: 'PLAY_MUSIC', url: msg.url, volume: msg.volume ?? 0.8 });
       return { ok: true };
 
     case 'AUDIO_STOP':
-      await sendAudio({ type: 'STOP_AUDIO' });
+      await sendAudio({ type: 'STOP_MUSIC' });
       return { ok: true };
 
     case 'AUDIO_VOLUME':
-      await sendAudio({ type: 'SET_VOLUME', volume: msg.volume });
+      await sendAudio({ type: 'SET_MUSIC_VOLUME', volume: msg.volume });
       return { ok: true };
+
+    case 'WEATHER_SET': {
+      // Broadcast to all tabs + play/stop weather sound
+      broadcastToTabs({ type: 'WEATHER_CHANGED', preset: msg.preset });
+      if (msg.preset?.sound_url) {
+        await sendAudio({ type: 'PLAY_WEATHER', url: msg.preset.sound_url, volume: msg.volume ?? 0.4 });
+      } else {
+        await sendAudio({ type: 'STOP_WEATHER' });
+      }
+      // Persist weather on the scene
+      if (msg.sceneId) {
+        const { error } = await sb.from('scenes')
+          .update({ weather_preset_id: msg.preset?.id ?? null })
+          .eq('id', msg.sceneId);
+        if (error) console.warn('[SW] weather update error:', error.message);
+      }
+      return { ok: true };
+    }
+
+    case 'WEATHER_VOLUME':
+      await sendAudio({ type: 'SET_WEATHER_VOLUME', volume: msg.volume });
+      return { ok: true };
+
+    case 'WEATHER_PRESETS_LIST': {
+      const { data, error } = await sb
+        .from('weather_presets')
+        .select('*')
+        .eq('campaign_id', msg.campaignId)
+        .order('name');
+      if (error) throw error;
+      return { presets: data };
+    }
+
+    case 'HANDOUTS_LIST': {
+      const { data, error } = await sb
+        .from('handouts')
+        .select('id, campaign_id, title, file_url, type')
+        .eq('campaign_id', msg.campaignId)
+        .order('title');
+      if (error) throw error;
+      return { handouts: data || [] };
+    }
 
     case 'INITIATIVE_TOGGLE': {
       const { error } = await sb
@@ -224,6 +269,17 @@ async function handleMessage(msg) {
 // -------------------------------------------------------------------------
 // Helpers
 // -------------------------------------------------------------------------
+
+// Game-ID from URL takes priority; fall back to profile.campaign_id for older setups.
+async function resolveCampaignId(gameId, profile) {
+  if (gameId) {
+    const { data } = await sb.from('campaigns').select('id').eq('game_id', gameId).single();
+    if (data) return data.id;
+    console.warn('[SW] Keine Kampagne fuer game_id:', gameId);
+  }
+  return profile?.campaign_id || null;
+}
+
 function playSceneAudio(scene, isCombat) {
   const url = isCombat ? (scene.combat_url || scene.ambient_url) : scene.ambient_url;
   if (url) sendAudio({ type: 'PLAY_AUDIO', url });

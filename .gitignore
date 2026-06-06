@@ -1,9 +1,19 @@
-extension/lib/config.js
+# Secrets
 watcher/.env
 .env
 *.local
+extension/lib/config.js
+
+# Dependencies
 watcher/node_modules/
-content/scenes/*/
-content/handouts/*
-!content/scenes/.gitkeep
-!content/handouts/.gitkeep
+
+# Content-Assets (Bilder/Audio - DM-lokal, nicht im Repo)
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.gif
+*.mp3
+*.ogg
+*.wav
+*.m4a
