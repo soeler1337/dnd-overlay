@@ -1,13 +1,14 @@
 <!DOCTYPE html>
 <!--
-  DnD Overlay – Stream Overlay
+  DnD Overlay - Stream Overlay
   ============================
-  In OBS als Browser-Quelle hinzufügen:
+  In OBS als Browser-Quelle hinzufuegen:
     URL:    file:///PFAD/ZU/stream-overlay.html?game=5570639
-    Breite: 1920, Höhe: 1080
-    Hintergrund: transparent (CSS-Hintergrund ist bereits transparent)
+    Breite: 1920, Hoehe: 1080
+    Hintergrund: transparent
 
   Der game= Parameter muss die DnD Beyond Game-ID sein.
+  Ein-/Ausblenden einfach ueber OBS (Quelle sichtbar/unsichtbar).
 -->
 <html lang="de">
 <head>
@@ -24,7 +25,13 @@
       font-family: 'Segoe UI', system-ui, Arial, sans-serif;
     }
 
-    /* ── Hintergrundbild ── */
+    #overlay-root {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    /* -- Hintergrundbild -- */
     #bg {
       position: absolute;
       inset: 0;
@@ -36,7 +43,7 @@
     }
     #bg.visible { opacity: var(--bg-opacity, 1); }
 
-    /* ── Wetter-GIF ── */
+    /* -- Wetter-GIF -- */
     #weather {
       position: absolute;
       inset: 0;
@@ -45,42 +52,10 @@
       background-repeat: repeat;
       opacity: 0;
       transition: opacity 1.2s ease;
-      pointer-events: none;
     }
     #weather.visible { opacity: 0.6; }
 
-    /* ── Stream-inaktiv: alles ausblenden ── */
-    #overlay-root {
-      position: absolute;
-      inset: 0;
-      opacity: 0;
-      transition: opacity 0.8s ease;
-      pointer-events: none;
-    }
-    #overlay-root.visible { opacity: 1; }
-
-    /* ── Portrait-Spotlight ── */
-    #portrait {
-      position: absolute;
-      right: 60px;
-      bottom: 60px;
-      width: 280px;
-      height: 360px;
-      border-radius: 8px;
-      border: 2px solid #c8a45a;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.8);
-      background-size: cover;
-      background-position: center top;
-      opacity: 0;
-      transform: translateY(20px);
-      transition: opacity 0.5s ease, transform 0.5s ease;
-    }
-    #portrait.visible {
-      opacity: 1;
-      transform: translateY(0);
-    }
-
-    /* ── Handout Mirror ── */
+    /* -- Handout Mirror (zentriert, mit Backdrop) -- */
     #handout-wrap {
       position: absolute;
       inset: 0;
@@ -90,7 +65,6 @@
       background: rgba(0,0,0,0.65);
       opacity: 0;
       transition: opacity 0.4s ease;
-      pointer-events: none;
     }
     #handout-wrap.visible { opacity: 1; }
 
@@ -126,20 +100,23 @@
       background: #0e0b06;
     }
 
-    /* ── Status (nur sichtbar wenn Stream inaktiv) ── */
-    #status {
+    /* -- Portrait-Slot (rechts unten, fuer spaetere Nutzung) -- */
+    #portrait {
       position: absolute;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: rgba(200,164,90,0.3);
-      font-size: 18px;
-      font-weight: 600;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      pointer-events: none;
+      right: 60px;
+      bottom: 60px;
+      width: 280px;
+      height: 360px;
+      border-radius: 8px;
+      border: 2px solid #c8a45a;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.8);
+      background-size: cover;
+      background-position: center top;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.5s ease, transform 0.5s ease;
     }
+    #portrait.visible { opacity: 1; transform: translateY(0); }
   </style>
 </head>
 <body>
@@ -156,142 +133,89 @@
   <div id="portrait"></div>
 </div>
 
-<div id="status">Stream inaktiv</div>
-
-<!-- Supabase SDK via CDN (eingebettet, kein Server nötig) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
-  // ── Konfiguration (gleiche Werte wie in der Extension) ──
   const SUPABASE_URL      = 'https://oeypwacjlbgpcwobvxix.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9leXB3YWNqbGJncGN3b2J2eGl4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA3NDM2MjUsImV4cCI6MjA5NjMxOTYyNX0.Z1NEjmnE_OHdOzlQ1ChFfbU6epVtVzCDmLQu86dvjJ0';
 
-  // Game-ID aus URL-Parameter lesen: ?game=5570639
   const gameId = new URLSearchParams(location.search).get('game') || '5570639';
 
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: { persistSession: false },
   });
 
-  // ── DOM-Referenzen ──
-  const root    = document.getElementById('overlay-root');
-  const bgEl    = document.getElementById('bg');
-  const wxEl    = document.getElementById('weather');
-  const portEl      = document.getElementById('portrait');
+  const bgEl        = document.getElementById('bg');
+  const wxEl        = document.getElementById('weather');
   const handoutWrap = document.getElementById('handout-wrap');
   const handoutImg  = document.getElementById('handout-img');
   const handoutTitle= document.getElementById('handout-title');
-  const statusEl    = document.getElementById('status');
+  const portEl      = document.getElementById('portrait');
 
-  // ── Zustand ──
-  let streamActive  = false;
-  let currentScene  = null;
+  let currentScene = null;
 
-  // ── Hintergrund anwenden ──
   function applyScene(scene, isCombat) {
     currentScene = scene;
-    if (!scene?.background_url || isCombat) {
-      bgEl.classList.remove('visible');
-      return;
-    }
+    if (!scene?.background_url || isCombat) { bgEl.classList.remove('visible'); return; }
     const opacity = scene.bg_opacity > 0 ? 1 : 0;
     bgEl.style.backgroundImage = `url(${JSON.stringify(scene.background_url)})`;
     bgEl.style.setProperty('--bg-opacity', opacity);
     bgEl.classList.toggle('visible', opacity > 0);
   }
 
-  // ── Wetter anwenden ──
   function applyWeather(preset, isCombat) {
-    if (isCombat || !preset?.gif_url) {
-      wxEl.classList.remove('visible');
-      return;
-    }
+    if (isCombat || !preset?.gif_url) { wxEl.classList.remove('visible'); return; }
     wxEl.style.backgroundImage = `url(${JSON.stringify(preset.gif_url)})`;
     wxEl.classList.add('visible');
   }
 
-  // ── Stream ein/aus ──
-  function setStream(active) {
-    streamActive = active;
-    root.classList.toggle('visible', active);
-    statusEl.style.display = active ? 'none' : 'flex';
-  }
-
-  // ── Handout Mirror ──
   function applyHandout(url, title) {
-    if (!url) {
-      handoutWrap.classList.remove('visible');
-      return;
-    }
+    if (!url) { handoutWrap.classList.remove('visible'); return; }
     handoutTitle.textContent = title || '';
     handoutImg.src = url;
     handoutWrap.classList.add('visible');
   }
 
-  // ── Portrait anzeigen / verbergen ──
   function showPortrait(url) {
-    if (!url) {
-      portEl.classList.remove('visible');
-      return;
-    }
+    if (!url) { portEl.classList.remove('visible'); return; }
     portEl.style.backgroundImage = `url(${JSON.stringify(url)})`;
     portEl.classList.add('visible');
   }
 
-  // ── Initialisierung ──
   async function init() {
-    // Kampagne anhand game_id laden
     const { data: campaign } = await sb
-      .from('campaigns')
-      .select('id')
-      .eq('game_id', gameId)
-      .single();
-
-    if (!campaign) {
-      statusEl.textContent = `Keine Kampagne für game=${gameId} gefunden.`;
-      return;
-    }
+      .from('campaigns').select('id').eq('game_id', gameId).single();
+    if (!campaign) { console.error('Keine Kampagne fuer game=' + gameId); return; }
 
     const campaignId = campaign.id;
 
-    // Session laden
     const { data: session } = await sb
       .from('sessions')
-      .select('id, active_scene_id, is_combat, stream_active, stream_handout_url, stream_handout_title')
+      .select('id, active_scene_id, is_combat, stream_handout_url, stream_handout_title')
       .eq('campaign_id', campaignId)
       .single();
+    if (!session) { console.error('Keine Session gefunden'); return; }
 
-    if (!session) { statusEl.textContent = 'Keine Session gefunden.'; return; }
-
-    setStream(!!session.stream_active);
     applyHandout(session.stream_handout_url, session.stream_handout_title);
 
-    // Aktive Szene laden
     if (session.active_scene_id) {
       const { data: scene } = await sb
-        .from('scenes')
-        .select('*')
-        .eq('id', session.active_scene_id)
-        .single();
+        .from('scenes').select('*').eq('id', session.active_scene_id).single();
       if (scene) applyScene(scene, session.is_combat);
     }
 
-    // Realtime abonnieren
     sb.channel('stream-' + session.id)
       .on('postgres_changes', {
         event: 'UPDATE', schema: 'public', table: 'sessions',
         filter: 'id=eq.' + session.id,
       }, async (payload) => {
         const s = payload.new;
-        setStream(!!s.stream_active);
         applyHandout(s.stream_handout_url, s.stream_handout_title);
 
-        // Szene gewechselt oder Combat-Status geändert
         if (s.active_scene_id) {
           const { data: scene } = await sb
             .from('scenes').select('*').eq('id', s.active_scene_id).single();
           if (scene) {
             applyScene(scene, !!s.is_combat);
-            // Wetter der Szene laden
             if (scene.weather_preset_id) {
               const { data: preset } = await sb
                 .from('weather_presets').select('*').eq('id', scene.weather_preset_id).single();
@@ -306,7 +230,6 @@
         event: 'UPDATE', schema: 'public', table: 'scenes',
         filter: 'campaign_id=eq.' + campaignId,
       }, (payload) => {
-        // Wetter-Preset auf aktiver Szene geändert
         if (currentScene && payload.new.id === currentScene.id) {
           applyScene(payload.new, false);
         }
@@ -314,10 +237,7 @@
       .subscribe();
   }
 
-  init().catch(e => {
-    statusEl.textContent = 'Fehler: ' + e.message;
-    console.error(e);
-  });
+  init().catch(e => console.error('Stream Overlay Fehler:', e));
 </script>
 </body>
 </html>
