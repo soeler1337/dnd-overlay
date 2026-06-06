@@ -581,6 +581,14 @@
           &#x2694; Initiative starten
         </button>
       </div>
+      <div id="dnd-weather-bar" style="margin-top:8px">
+        <div class="dnd-music-row">
+          <span class="dnd-opacity-label">&#127783; Wetter</span>
+          <select class="dnd-weather-select" id="dnd-global-weather-select">
+            <option value="">— keins —</option>
+          </select>
+        </div>
+      </div>
       <hr class="dnd-divider" />
       <div id="dnd-scenes-container">
         <p class="dnd-placeholder">Szenen werden geladen...</p>
@@ -741,6 +749,37 @@
     const session        = sessionResp.session;
     const weatherPresets = weatherResp.presets || [];
 
+    // --- Global weather dropdown ---
+    const globalWeatherSel = body.querySelector('#dnd-global-weather-select');
+    if (globalWeatherSel && weatherPresets.length) {
+      weatherPresets.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = p.name;
+        globalWeatherSel.appendChild(opt);
+      });
+      // Pre-select weather of current active scene
+      const activeScene = (scenesResp.scenes || []).find(s => s.id === session?.active_scene_id);
+      if (activeScene?.weather_preset_id) globalWeatherSel.value = activeScene.weather_preset_id;
+
+      globalWeatherSel.addEventListener('change', async () => {
+        const presetId = globalWeatherSel.value;
+        const preset   = weatherPresets.find(p => p.id === presetId) || null;
+        // Find active scene to persist
+        const activeRow = body.querySelector('.dnd-scene-row.active');
+        const sceneId   = activeRow?.dataset.sceneId || null;
+        if (sceneId) {
+          const scene = (window._dndScenes || []).find(s => s.id === sceneId);
+          if (scene) scene.weather_preset_id = presetId || null;
+        }
+        applyWeather(preset);
+        const wVol = parseFloat(body.querySelector('#dnd-weather-volume-slider')?.value ?? 0.3);
+        chrome.runtime.sendMessage({ type: 'WEATHER_SET', preset, sceneId, volume: wVol });
+      });
+    } else if (globalWeatherSel && !weatherPresets.length) {
+      globalWeatherSel.style.display = 'none';
+    }
+
     // --- Notes DM editor ---
     const notesEditor = body.querySelector('#dnd-notes-editor');
     notesEditor.value = notesResp.content || '';
@@ -881,16 +920,11 @@
 
     scenes.forEach(scene => {
       const isActive = scene.id === activeSceneId;
-      const bgOn     = scene.bg_opacity > 0; // Feature 2: boolean
+      const bgOn     = scene.bg_opacity > 0;
 
       const wrap = document.createElement('div');
       wrap.className = 'dnd-scene-row' + (isActive ? ' active' : '');
       wrap.dataset.sceneId = scene.id;
-
-      // Build weather options
-      const weatherOptions = weatherPresets.map(p =>
-        `<option value="${p.id}">${esc(p.name)}</option>`
-      ).join('');
 
       wrap.innerHTML = `
         <button class="dnd-scene-btn" data-scene-id="${scene.id}">
@@ -902,21 +936,7 @@
             ${bgOn ? 'AN' : 'AUS'}
           </button>
         </div>
-        ${weatherPresets.length ? `
-        <div class="dnd-opacity-row">
-          <span class="dnd-opacity-label">Wetter</span>
-          <select class="dnd-weather-select" data-scene-id="${scene.id}">
-            <option value="">— keins —</option>
-            ${weatherOptions}
-          </select>
-        </div>` : ''}
       `;
-
-      // Pre-select stored weather
-      if (scene.weather_preset_id) {
-        const sel = wrap.querySelector('.dnd-weather-select');
-        if (sel) sel.value = scene.weather_preset_id;
-      }
 
       // Scene switch button
       wrap.querySelector('.dnd-scene-btn').addEventListener('click', async () => {
@@ -926,12 +946,16 @@
         const vol    = parseFloat(body.querySelector('#dnd-volume-slider')?.value ?? 0.8);
         const combat = combatActive;
 
+        // Sync global weather dropdown to new scene's preset
+        const gSel = body.querySelector('#dnd-global-weather-select');
+        if (gSel) gSel.value = scene.weather_preset_id || '';
+
         if (combat) {
           // Initiative läuft: nur Sound wechseln, Hintergrund + Wetter bleiben unsichtbar
           const audioUrl = resolveAudioUrl(scene, true);
           if (audioUrl) chrome.runtime.sendMessage({ type: 'AUDIO_PLAY', url: audioUrl, volume: vol });
           else          chrome.runtime.sendMessage({ type: 'AUDIO_STOP' });
-          // Wetter in DB persistieren ohne Broadcast (wird beim Initiative-Ende aktiv)
+          // Wetter in DB persistieren ohne visuellen Broadcast (wird beim Initiative-Ende aktiv)
           const preset = weatherPresets.find(p => p.id === scene.weather_preset_id) || null;
           chrome.runtime.sendMessage({ type: 'WEATHER_SET', preset, sceneId: scene.id });
         } else {
@@ -966,25 +990,6 @@
           opacity: newOpacity,
         });
       });
-
-      // Weather dropdown
-      const weatherSel = wrap.querySelector('.dnd-weather-select');
-      if (weatherSel) {
-        weatherSel.addEventListener('change', async () => {
-          const presetId = weatherSel.value;
-          const preset   = weatherPresets.find(p => p.id === presetId) || null;
-          scene.weather_preset_id = presetId || null;
-          // Only broadcast/play if this scene is currently active
-          if (wrap.classList.contains('active')) {
-            applyWeather(preset);
-            const vol = parseFloat(body.querySelector('#dnd-weather-volume-slider')?.value ?? 0.3);
-            chrome.runtime.sendMessage({ type: 'WEATHER_SET', preset, sceneId: scene.id, volume: vol });
-          } else {
-            // Persist without broadcasting
-            chrome.runtime.sendMessage({ type: 'WEATHER_SET', preset, sceneId: scene.id });
-          }
-        });
-      }
 
       container.appendChild(wrap);
     });
