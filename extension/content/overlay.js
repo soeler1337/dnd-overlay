@@ -1,5 +1,4 @@
 // Content Script - injected into dndbeyond.com/games/* pages.
-// Renders the overlay UI; all data goes through the service worker via messages.
 
 (function () {
   if (document.getElementById('dnd-overlay-root')) return;
@@ -29,7 +28,6 @@
     </div>
   `;
 
-  toggleBtn.addEventListener('click', () => { panel.hidden = !panel.hidden; });
   panel.querySelector('.dnd-panel-close').addEventListener('click', () => { panel.hidden = true; });
 
   root.appendChild(toggleBtn);
@@ -37,39 +35,92 @@
   document.body.appendChild(root);
 
   // -------------------------------------------------------------------------
-  // Panels - loaded as extension-page scripts via importShim workaround.
-  // Because content scripts can't use ES module imports, we load panel scripts
-  // as regular <script type="module"> tags injected into a shadow container.
-  // They communicate back via custom events on the root element.
+  // Draggable toggle button
+  // -------------------------------------------------------------------------
+  (function makeDraggable() {
+    // Restore saved position
+    const saved = JSON.parse(localStorage.getItem('dnd-overlay-pos') || 'null');
+    if (saved) {
+      root.style.bottom = saved.bottom;
+      root.style.right  = saved.right;
+      root.style.top    = saved.top    || 'auto';
+      root.style.left   = saved.left   || 'auto';
+    }
+
+    let dragging = false;
+    let startX, startY, startRight, startBottom;
+
+    toggleBtn.addEventListener('mousedown', (e) => {
+      dragging = false;
+      startX = e.clientX;
+      startY = e.clientY;
+      const rect = root.getBoundingClientRect();
+      startRight  = window.innerWidth  - rect.right;
+      startBottom = window.innerHeight - rect.bottom;
+
+      const onMove = (e) => {
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        if (!dragging && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+        dragging = true;
+
+        const newRight  = Math.max(0, startRight  - dx);
+        const newBottom = Math.max(0, startBottom + dy);
+
+        root.style.right  = newRight  + 'px';
+        root.style.bottom = newBottom + 'px';
+        root.style.left   = 'auto';
+        root.style.top    = 'auto';
+      };
+
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        if (dragging) {
+          localStorage.setItem('dnd-overlay-pos', JSON.stringify({
+            right:  root.style.right,
+            bottom: root.style.bottom,
+            left:   'auto',
+            top:    'auto',
+          }));
+        }
+      };
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+
+    toggleBtn.addEventListener('click', (e) => {
+      if (dragging) { e.preventDefault(); return; }
+      panel.hidden = !panel.hidden;
+    });
+  })();
+
+  // -------------------------------------------------------------------------
+  // Auth & panels
   // -------------------------------------------------------------------------
   const body = document.getElementById('dnd-panel-body');
 
   async function init() {
     const resp = await chrome.runtime.sendMessage({ type: 'AUTH_GET_SESSION' });
-
     if (resp.error) {
-      body.innerHTML = `<p class="dnd-error">Fehler: ${escHtml(resp.error)}</p>`;
+      body.innerHTML = `<p class="dnd-error">Fehler: ${esc(resp.error)}</p>`;
       return;
     }
-
-    if (!resp.session) {
-      renderLogin();
-    } else {
-      renderApp(resp.session, resp.profile);
-    }
+    resp.session ? renderApp(resp.session, resp.profile) : renderLogin();
   }
 
-  // -- Login form (inline, no module import needed) --------------------------
+  // -- Login -----------------------------------------------------------------
   function renderLogin() {
     body.innerHTML = `
       <form id="dnd-login-form" novalidate>
         <div class="dnd-field">
-          <label for="dnd-email">E-Mail</label>
-          <input id="dnd-email" type="email" autocomplete="email" placeholder="spieler@example.com" />
+          <label for="dnd-user">Benutzername</label>
+          <input id="dnd-user" type="text" autocomplete="username" placeholder="soeler" />
         </div>
         <div class="dnd-field">
           <label for="dnd-password">Passwort</label>
-          <input id="dnd-password" type="password" autocomplete="current-password" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" />
+          <input id="dnd-password" type="password" autocomplete="current-password" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;" />
         </div>
         <div id="dnd-login-error" class="dnd-error" hidden></div>
         <button type="submit" class="dnd-btn dnd-btn-primary" id="dnd-login-btn">Einloggen</button>
@@ -78,7 +129,7 @@
 
     body.querySelector('#dnd-login-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const email    = body.querySelector('#dnd-email').value.trim();
+      const username = body.querySelector('#dnd-user').value.trim().toLowerCase();
       const password = body.querySelector('#dnd-password').value;
       const errEl    = body.querySelector('#dnd-login-error');
       const btnEl    = body.querySelector('#dnd-login-btn');
@@ -87,15 +138,19 @@
       btnEl.disabled = true;
       btnEl.textContent = 'Bitte warten...';
 
-      if (!email || !password) {
-        showErr(errEl, btnEl, 'Bitte E-Mail und Passwort eingeben.');
+      if (!username || !password) {
+        showErr(errEl, btnEl, 'Bitte Benutzername und Passwort eingeben.');
         return;
       }
 
-      const resp = await chrome.runtime.sendMessage({ type: 'AUTH_SIGN_IN', email, password });
+      const resp = await chrome.runtime.sendMessage({
+        type: 'AUTH_SIGN_IN',
+        email: username + '@dnd-overlay.local',
+        password,
+      });
 
       if (resp.error) {
-        showErr(errEl, btnEl, resp.error);
+        showErr(errEl, btnEl, 'Benutzername oder Passwort falsch.');
         return;
       }
 
@@ -110,12 +165,12 @@
     btnEl.textContent = 'Einloggen';
   }
 
-  // -- Main app view ---------------------------------------------------------
+  // -- App view --------------------------------------------------------------
   function renderApp(session, profile) {
-    const isDm   = profile?.role === 'dm';
-    const name   = escHtml(profile?.display_name || session.user.email);
-    const role   = isDm ? 'Dungeon Master' : 'Spieler';
-    const badge  = isDm ? 'dm' : 'player';
+    const isDm  = profile?.role === 'dm';
+    const name  = esc(profile?.display_name || profile?.username || session.user.email);
+    const role  = isDm ? 'Dungeon Master' : 'Spieler';
+    const badge = isDm ? 'dm' : 'player';
 
     body.innerHTML = `
       <div class="dnd-welcome">
@@ -124,9 +179,7 @@
       </div>
       <hr class="dnd-divider" />
       <p class="dnd-placeholder">
-        ${isDm
-          ? 'Szenen-Schalter kommt in Milestone 3.'
-          : 'Initiative und Handouts kommen in Milestone 5/6.'}
+        ${isDm ? 'Szenen-Schalter kommt in Milestone 3.' : 'Initiative und Handouts kommen in Milestone 5/6.'}
       </p>
       <button class="dnd-btn dnd-btn-secondary" id="dnd-logout-btn">Ausloggen</button>
     `;
@@ -137,13 +190,10 @@
     });
   }
 
-  function escHtml(str) {
+  function esc(str) {
     if (!str) return '';
     return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
-  // -------------------------------------------------------------------------
-  // Start
-  // -------------------------------------------------------------------------
   init();
 })();

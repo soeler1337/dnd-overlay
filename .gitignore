@@ -1,3 +1,9 @@
 extension/lib/config.js
+watcher/.env
 .env
 *.local
+watcher/node_modules/
+content/scenes/*/
+content/handouts/*
+!content/scenes/.gitkeep
+!content/handouts/.gitkeep
