@@ -104,7 +104,7 @@
       background: #0e0b06;
     }
 
-    /* -- Portrait-Slot (rechts unten, fuer spaetere Nutzung) -- */
+    /* -- Portrait-Slot (rechts unten) -- */
     #portrait {
       position: absolute;
       right: 60px;
@@ -121,6 +121,106 @@
       transition: opacity 0.5s ease, transform 0.5s ease;
     }
     #portrait.visible { opacity: 1; transform: translateY(0); }
+
+    /* =====================================================
+       Wuerfellog – unten links
+       ===================================================== */
+    #dice-log {
+      position: absolute;
+      left: 48px;
+      bottom: 48px;
+      width: 320px;
+      display: flex;
+      flex-direction: column-reverse; /* newest at bottom */
+      gap: 8px;
+    }
+
+    .dice-entry {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: linear-gradient(135deg, rgba(14,11,6,0.92) 0%, rgba(22,18,10,0.88) 100%);
+      border: 1px solid #c8a45a44;
+      border-left: 3px solid #c8a45a;
+      border-radius: 6px;
+      padding: 8px 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.7);
+      animation: dice-slide-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+
+    .dice-entry.nat20 {
+      border-left-color: #f0d060;
+      background: linear-gradient(135deg, rgba(20,14,2,0.95) 0%, rgba(28,20,4,0.92) 100%);
+      box-shadow: 0 4px 24px rgba(200,164,90,0.35);
+    }
+
+    .dice-entry.fading {
+      animation: dice-fade-out 0.5s ease forwards;
+    }
+
+    @keyframes dice-slide-in {
+      from { opacity: 0; transform: translateX(-24px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+
+    @keyframes dice-fade-out {
+      from { opacity: 1; transform: translateX(0); }
+      to   { opacity: 0; transform: translateX(-16px); }
+    }
+
+    .dice-total {
+      font-size: 32px;
+      font-weight: 800;
+      color: #c8a45a;
+      line-height: 1;
+      min-width: 44px;
+      text-align: center;
+      letter-spacing: -1px;
+      flex-shrink: 0;
+    }
+
+    .dice-entry.nat20 .dice-total {
+      color: #f0d060;
+      text-shadow: 0 0 12px #f0d06088;
+    }
+
+    .dice-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .dice-player {
+      font-size: 11px;
+      font-weight: 700;
+      color: #c8a45a;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .dice-entry.nat20 .dice-player {
+      color: #f0d060;
+    }
+
+    .dice-label {
+      font-size: 12px;
+      color: #9a8a6a;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .dice-nat-badge {
+      font-size: 10px;
+      font-weight: 800;
+      color: #f0d060;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
   </style>
 </head>
 <body>
@@ -135,6 +235,7 @@
     </div>
   </div>
   <div id="portrait"></div>
+  <div id="dice-log"></div>
 </div>
 
 <script src="extension/lib/supabase.umd.js"></script>
@@ -154,9 +255,18 @@
   const handoutImg  = document.getElementById('handout-img');
   const handoutTitle= document.getElementById('handout-title');
   const portEl      = document.getElementById('portrait');
+  const diceLog     = document.getElementById('dice-log');
+
+  // Max visible dice entries
+  const DICE_MAX    = 5;
+  // Auto-remove after this many ms (0 = never)
+  const DICE_TTL_MS = 18000;
 
   let currentScene = null;
 
+  // ------------------------------------------------------------------
+  // Scene / weather / handout helpers
+  // ------------------------------------------------------------------
   function applyScene(scene, isCombat) {
     currentScene = scene;
     if (!scene?.background_url || isCombat) { bgEl.classList.remove('visible'); return; }
@@ -185,12 +295,71 @@
     portEl.classList.add('visible');
   }
 
+  // ------------------------------------------------------------------
+  // Dice log helpers
+  // ------------------------------------------------------------------
+  function addDiceEntry(roll) {
+    // Remove oldest if at max
+    while (diceLog.children.length >= DICE_MAX) {
+      removeDiceEntry(diceLog.lastElementChild);
+    }
+
+    const entry = document.createElement('div');
+    entry.className = 'dice-entry' + (roll.is_nat20 ? ' nat20' : '');
+
+    const totalStr = roll.total != null ? String(roll.total) : '?';
+    const player   = roll.player_name  || '';
+    const label    = roll.roll_label   || '';
+
+    entry.innerHTML =
+      '<div class="dice-total">' + esc(totalStr) + '</div>' +
+      '<div class="dice-info">' +
+        (player ? '<div class="dice-player">' + esc(player) + '</div>' : '') +
+        (roll.is_nat20 ? '<div class="dice-nat-badge">&#x2605; Nat 20!</div>' : '') +
+        (label  ? '<div class="dice-label">'  + esc(label)  + '</div>' : '') +
+      '</div>';
+
+    diceLog.prepend(entry);
+
+    if (DICE_TTL_MS > 0) {
+      setTimeout(() => removeDiceEntry(entry), DICE_TTL_MS);
+    }
+  }
+
+  function removeDiceEntry(el) {
+    if (!el || !el.parentNode) return;
+    el.classList.add('fading');
+    el.addEventListener('animationend', () => el.remove(), { once: true });
+  }
+
+  function esc(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  // ------------------------------------------------------------------
+  // Init
+  // ------------------------------------------------------------------
   async function init() {
     const { data: campaign } = await sb
       .from('campaigns').select('id').eq('game_id', gameId).single();
     if (!campaign) { console.error('Keine Kampagne fuer game=' + gameId); return; }
 
     const campaignId = campaign.id;
+
+    // Load recent dice rolls (last 5) so overlay isn't empty on page load
+    const { data: recentRolls } = await sb
+      .from('dice_rolls')
+      .select('*')
+      .eq('campaign_id', campaignId)
+      .order('created_at', { ascending: false })
+      .limit(DICE_MAX);
+    if (recentRolls) {
+      // Add oldest first so newest ends up at bottom
+      [...recentRolls].reverse().forEach(r => addDiceEntry(r));
+    }
 
     const { data: session } = await sb
       .from('sessions')
@@ -207,6 +376,7 @@
       if (scene) applyScene(scene, session.is_combat);
     }
 
+    // Main channel: session + scene updates
     sb.channel('stream-' + session.id)
       .on('postgres_changes', {
         event: 'UPDATE', schema: 'public', table: 'sessions',
@@ -237,6 +407,16 @@
         if (currentScene && payload.new.id === currentScene.id) {
           applyScene(payload.new, false);
         }
+      })
+      .subscribe();
+
+    // Dice channel: new roll inserts
+    sb.channel('dice-' + campaignId)
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'dice_rolls',
+        filter: 'campaign_id=eq.' + campaignId,
+      }, (payload) => {
+        addDiceEntry(payload.new);
       })
       .subscribe();
   }

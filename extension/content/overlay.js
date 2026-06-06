@@ -589,6 +589,77 @@
     window._dndIsDm          = isDm;
     window._dndCampaignId    = profile?.campaign_id ?? null;
     isDm ? renderDm(profile) : renderPlayer(profile, session);
+    if (profile?.campaign_id) startDiceObserver(profile.campaign_id);
+  }
+
+  // -------------------------------------------------------------------------
+  // Dice roll observer – watches DnD Beyond's built-in dice log for new rolls
+  // and forwards them to Supabase so the stream overlay can display them.
+  // DnD Beyond uses obfuscated class names that may change; we therefore rely
+  // on a combination of class-pattern matching and content heuristics.
+  // -------------------------------------------------------------------------
+  function startDiceObserver(campaignId) {
+    let lastHash = '';
+
+    function sendRoll(data) {
+      // Coarse dedup within the same 4-second window on the client side
+      const hash = `${data.player}|${data.total}|${Math.floor(Date.now() / 4000)}`;
+      if (hash === lastHash) return;
+      lastHash = hash;
+      chrome.runtime.sendMessage({ type: 'DICE_ROLL', campaignId, ...data }).catch(() => {});
+    }
+
+    function parseRollNode(node) {
+      if (node.nodeType !== 1) return null;
+      const text = (node.innerText || node.textContent || '').trim();
+      if (text.length < 2 || !/\d/.test(text)) return null;
+
+      // Extract all small integers (1–150) that could be roll totals
+      const nums = [...text.matchAll(/\b(\d{1,3})\b/g)]
+        .map(m => parseInt(m[1]))
+        .filter(n => n >= 1 && n <= 150);
+      if (!nums.length) return null;
+
+      // The total is usually the last (or largest) prominent number shown
+      const total = nums[nums.length - 1];
+
+      // Player / character name – look for name-class elements first
+      const nameEl = node.querySelector(
+        '[class*="name" i], [class*="player" i], [class*="character" i], [class*="avatar" i]'
+      );
+      const player = (nameEl?.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 50);
+
+      // Roll label – first line of the entry text is usually the description
+      const firstLine = text.split('\n').find(l => l.trim().length > 1) || '';
+      const label = firstLine.trim().slice(0, 60);
+
+      // NAT 20 detection: total is 20 and a d20 is mentioned, or DnD Beyond
+      // explicitly shows "Natural 20" / "Nat 20" text
+      const isNat20 = (total === 20 && /d20/i.test(text)) || /nat(?:ural)?\s*20/i.test(text);
+
+      return { player, label, total, isNat20 };
+    }
+
+    const observer = new MutationObserver(mutations => {
+      for (const m of mutations) {
+        for (const node of m.addedNodes) {
+          if (node.nodeType !== 1) continue;
+
+          // Only care about elements that look like dice-roll entries:
+          // they have "roll" or "dice" somewhere in their own class string,
+          // OR contain a child with such a class.
+          const ownCls = (typeof node.className === 'string' ? node.className : '').toLowerCase();
+          const hasDiceClass = ownCls.includes('roll') || ownCls.includes('dice') ||
+            !!node.querySelector('[class*="roll" i], [class*="dice" i]');
+          if (!hasDiceClass) continue;
+
+          const roll = parseRollNode(node);
+          if (roll && roll.total) sendRoll(roll);
+        }
+      }
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
   }
 
   // -- DM view ---------------------------------------------------------------

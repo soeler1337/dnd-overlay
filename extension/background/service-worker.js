@@ -325,6 +325,29 @@ async function handleMessage(msg) {
       return { ok: true };
     }
 
+    case 'DICE_ROLL': {
+      // Deduplicate: ignore if identical roll (same player + total) within last 5 s
+      const since = new Date(Date.now() - 5000).toISOString();
+      const { data: recent } = await sb
+        .from('dice_rolls')
+        .select('id')
+        .eq('campaign_id', msg.campaignId)
+        .eq('player_name', msg.player || '')
+        .eq('total', msg.total)
+        .gte('created_at', since)
+        .limit(1);
+      if (recent && recent.length > 0) return { ok: true, deduped: true };
+      const { error } = await sb.from('dice_rolls').insert({
+        campaign_id: msg.campaignId,
+        player_name: msg.player  || '',
+        roll_label:  msg.label   || '',
+        total:       msg.total   ?? null,
+        is_nat20:    msg.isNat20 ?? false,
+      });
+      if (error) console.warn('[SW] dice_roll insert error:', error.message);
+      return { ok: true };
+    }
+
     case 'NOTES_GET': {
       const { data } = await sb
         .from('campaign_notes')
