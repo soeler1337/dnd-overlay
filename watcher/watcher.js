@@ -231,10 +231,13 @@ function startWatcher() {
       if (!fs.existsSync(full)) return; // deleted - ignore for now
       try {
         if (baseDir === scenesDir) {
-          // filename may be "scene/subfolder/file" - always take top-level folder
           const parts  = filename.split(path.sep);
           const sceneD = path.join(scenesDir, parts[0]);
-          if (fs.existsSync(sceneD) && fs.statSync(sceneD).isDirectory()) await syncScene(sceneD);
+          if (!fs.existsSync(sceneD) || !fs.statSync(sceneD).isDirectory()) return;
+          // Skip Windows default "Neuer Ordner" / "New folder" - user is still renaming
+          const folderName = parts[0];
+          if (/^(neuer ordner|new folder)$/i.test(folderName)) return;
+          await syncScene(sceneD);
         } else {
           await syncHandout(full);
         }

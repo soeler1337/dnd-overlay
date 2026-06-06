@@ -83,8 +83,8 @@ function subscribeToSession(sessionId, campaignId) {
           .single();
 
         if (scene) {
-          broadcastToTabs({ type: 'SCENE_CHANGED', scene, isCombat });
-          playSceneAudio(scene, isCombat);
+          broadcastToTabs({ type: 'SCENE_CHANGED', scene, isCombat: !!isCombat });
+          playSceneAudio(scene, !!isCombat);
         }
       }
     })
@@ -185,7 +185,8 @@ async function handleMessage(msg) {
     }
 
     case 'AUDIO_PLAY':
-      await sendAudio({ type: 'PLAY_AUDIO', url: msg.url, volume: msg.volume });
+      if (!msg.url) return { ok: true };
+      await sendAudio({ type: 'PLAY_AUDIO', url: msg.url, volume: msg.volume ?? 0.8 });
       return { ok: true };
 
     case 'AUDIO_STOP':
