@@ -225,3 +225,71 @@
   border-top: 1px solid #c8a45a22;
   margin: 12px 0;
 }
+
+/* Full-page background overlay (behind DDB UI, above DDB backdrop) */
+#dnd-bg-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483640;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.8s ease;
+}
+
+#dnd-bg-overlay.active {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+/* Scene buttons */
+.dnd-scene-btn {
+  all: unset;
+  cursor: pointer;
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  border-radius: 4px;
+  background: #0d0a04;
+  border: 1px solid #4a3a20;
+  color: #e8dcc8;
+  font-size: 13px;
+  transition: border-color 0.15s, background 0.15s;
+  text-align: left;
+}
+
+.dnd-scene-btn:hover {
+  border-color: #c8a45a;
+  background: #1a1209;
+}
+
+.dnd-scene-btn.active {
+  border-color: #c8a45a;
+  background: #2c1a06;
+  color: #c8a45a;
+  font-weight: 600;
+}
+
+.dnd-section-label {
+  font-size: 10px;
+  color: #c8a45a;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin: 0 0 8px;
+}
+
+.dnd-welcome {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.dnd-welcome strong {
+  font-size: 14px;
+}

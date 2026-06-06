@@ -12,7 +12,7 @@
   const toggleBtn = document.createElement('button');
   toggleBtn.id = 'dnd-overlay-toggle';
   toggleBtn.textContent = 'DnD';
-  toggleBtn.title = 'DnD Overlay oeffnen / schliessen';
+  toggleBtn.title = 'DnD Overlay';
 
   const panel = document.createElement('div');
   panel.id = 'dnd-overlay-panel';
@@ -29,22 +29,36 @@
   `;
 
   panel.querySelector('.dnd-panel-close').addEventListener('click', () => { panel.hidden = true; });
-
   root.appendChild(toggleBtn);
   root.appendChild(panel);
   document.body.appendChild(root);
 
   // -------------------------------------------------------------------------
+  // Background overlay (shown when DM activates a scene with a background)
+  // -------------------------------------------------------------------------
+  const bgOverlay = document.createElement('div');
+  bgOverlay.id = 'dnd-bg-overlay';
+  document.body.appendChild(bgOverlay);
+
+  function setBackground(url) {
+    if (url) {
+      bgOverlay.style.backgroundImage = `url(${JSON.stringify(url)})`;
+      bgOverlay.classList.add('active');
+    } else {
+      bgOverlay.classList.remove('active');
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // Draggable toggle button
   // -------------------------------------------------------------------------
   (function makeDraggable() {
-    // Restore saved position
     const saved = JSON.parse(localStorage.getItem('dnd-overlay-pos') || 'null');
     if (saved) {
       root.style.bottom = saved.bottom;
       root.style.right  = saved.right;
-      root.style.top    = saved.top    || 'auto';
-      root.style.left   = saved.left   || 'auto';
+      root.style.top    = saved.top  || 'auto';
+      root.style.left   = saved.left || 'auto';
     }
 
     let dragging = false;
@@ -63,14 +77,9 @@
         const dy = e.clientY - startY;
         if (!dragging && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
         dragging = true;
-
-        const newRight  = Math.max(0, startRight  - dx);
-        const newBottom = Math.max(0, startBottom + dy);
-
-        root.style.right  = newRight  + 'px';
-        root.style.bottom = newBottom + 'px';
-        root.style.left   = 'auto';
-        root.style.top    = 'auto';
+        root.style.right  = Math.max(0, startRight  - dx) + 'px';
+        root.style.bottom = Math.max(0, startBottom + dy) + 'px';
+        root.style.left = root.style.top = 'auto';
       };
 
       const onUp = () => {
@@ -78,10 +87,7 @@
         document.removeEventListener('mouseup', onUp);
         if (dragging) {
           localStorage.setItem('dnd-overlay-pos', JSON.stringify({
-            right:  root.style.right,
-            bottom: root.style.bottom,
-            left:   'auto',
-            top:    'auto',
+            right: root.style.right, bottom: root.style.bottom, left: 'auto', top: 'auto',
           }));
         }
       };
@@ -95,6 +101,22 @@
       panel.hidden = !panel.hidden;
     });
   })();
+
+  // -------------------------------------------------------------------------
+  // Realtime messages from service worker
+  // -------------------------------------------------------------------------
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.type === 'SCENE_CHANGED') applyScene(msg.scene);
+  });
+
+  function applyScene(scene) {
+    setBackground(scene.background_url || null);
+    // Audio handled in Milestone 4
+    // Update active-scene indicator in DM panel if open
+    document.querySelectorAll('.dnd-scene-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.sceneId === scene.id);
+    });
+  }
 
   // -------------------------------------------------------------------------
   // Auth & panels
@@ -139,21 +161,14 @@
       btnEl.textContent = 'Bitte warten...';
 
       if (!username || !password) {
-        showErr(errEl, btnEl, 'Bitte Benutzername und Passwort eingeben.');
-        return;
+        showErr(errEl, btnEl, 'Bitte Benutzername und Passwort eingeben.'); return;
       }
 
       const resp = await chrome.runtime.sendMessage({
-        type: 'AUTH_SIGN_IN',
-        email: username + '@dnd-overlay.local',
-        password,
+        type: 'AUTH_SIGN_IN', email: username + '@dnd-overlay.local', password,
       });
 
-      if (resp.error) {
-        showErr(errEl, btnEl, resp.error);
-        return;
-      }
-
+      if (resp.error) { showErr(errEl, btnEl, resp.error); return; }
       renderApp(resp.session, resp.profile);
     });
   }
@@ -165,27 +180,96 @@
     btnEl.textContent = 'Einloggen';
   }
 
-  // -- App view --------------------------------------------------------------
+  // -- App -------------------------------------------------------------------
   function renderApp(session, profile) {
-    const isDm  = profile?.role === 'dm';
-    const name  = esc(profile?.display_name || profile?.username || session.user.email);
-    const role  = isDm ? 'Dungeon Master' : 'Spieler';
-    const badge = isDm ? 'dm' : 'player';
+    const isDm = profile?.role === 'dm';
+    isDm ? renderDm(profile) : renderPlayer(profile, session);
+  }
 
+  // -- DM view ---------------------------------------------------------------
+  async function renderDm(profile) {
     body.innerHTML = `
       <div class="dnd-welcome">
-        <p>Willkommen, <strong>${name}</strong>!</p>
-        <span class="dnd-role-badge ${badge}">${role}</span>
+        <strong>${esc(profile.display_name || profile.username)}</strong>
+        <span class="dnd-role-badge dm">DM</span>
       </div>
       <hr class="dnd-divider" />
-      <p class="dnd-placeholder">
-        ${isDm ? 'Szenen-Schalter kommt in Milestone 3.' : 'Initiative und Handouts kommen in Milestone 5/6.'}
-      </p>
+      <div id="dnd-scenes-container">
+        <p class="dnd-placeholder">Szenen werden geladen...</p>
+      </div>
+      <hr class="dnd-divider" />
       <button class="dnd-btn dnd-btn-secondary" id="dnd-logout-btn">Ausloggen</button>
     `;
 
     body.querySelector('#dnd-logout-btn').addEventListener('click', async () => {
       await chrome.runtime.sendMessage({ type: 'AUTH_SIGN_OUT' });
+      setBackground(null);
+      renderLogin();
+    });
+
+    const [scenesResp, sessionResp] = await Promise.all([
+      chrome.runtime.sendMessage({ type: 'SCENES_LIST', campaignId: profile.campaign_id }),
+      chrome.runtime.sendMessage({ type: 'SESSION_GET', campaignId: profile.campaign_id }),
+    ]);
+
+    renderSceneButtons(
+      scenesResp.scenes || [],
+      sessionResp.session?.active_scene_id || null,
+      profile.campaign_id
+    );
+  }
+
+  function renderSceneButtons(scenes, activeSceneId, campaignId) {
+    const container = document.getElementById('dnd-scenes-container');
+    if (!container) return;
+
+    if (!scenes.length) {
+      container.innerHTML = `
+        <p class="dnd-placeholder">Noch keine Szenen. Lege Ordner in<br><code>content/scenes/</code> an und starte den Watcher.</p>
+      `;
+      return;
+    }
+
+    container.innerHTML = `<p class="dnd-section-label">Szene auswaehlen</p>`;
+
+    scenes.forEach(scene => {
+      const btn = document.createElement('button');
+      btn.className = 'dnd-btn dnd-scene-btn' + (scene.id === activeSceneId ? ' active' : '');
+      btn.dataset.sceneId = scene.id;
+      btn.textContent = (scene.is_combat ? '⚔ ' : '🏕 ') + scene.name;
+
+      btn.addEventListener('click', async () => {
+        document.querySelectorAll('.dnd-scene-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        await chrome.runtime.sendMessage({
+          type: 'SCENE_SWITCH', sceneId: scene.id, campaignId,
+        });
+
+        // Apply locally immediately (don't wait for realtime echo)
+        applyScene(scene);
+      });
+
+      container.appendChild(btn);
+    });
+  }
+
+  // -- Player view -----------------------------------------------------------
+  function renderPlayer(profile, session) {
+    body.innerHTML = `
+      <div class="dnd-welcome">
+        <strong>${esc(profile.display_name || profile.username)}</strong>
+        <span class="dnd-role-badge player">Spieler</span>
+      </div>
+      <hr class="dnd-divider" />
+      <p class="dnd-placeholder">Der DM steuert das Geschehen.<br>Aenderungen erscheinen automatisch.</p>
+      <hr class="dnd-divider" />
+      <button class="dnd-btn dnd-btn-secondary" id="dnd-logout-btn">Ausloggen</button>
+    `;
+
+    body.querySelector('#dnd-logout-btn').addEventListener('click', async () => {
+      await chrome.runtime.sendMessage({ type: 'AUTH_SIGN_OUT' });
+      setBackground(null);
       renderLogin();
     });
   }
