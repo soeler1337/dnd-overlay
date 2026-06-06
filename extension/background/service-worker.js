@@ -37,15 +37,19 @@ function subscribeToSession(sessionId, campaignId) {
     realtimeChannel = null;
   }
 
+  // Track active scene so scene updates can check if they need broadcasting
+  let activeSceneId = null;
+
   realtimeChannel = sb
     .channel('session-' + sessionId)
+    // Session change = DM switched scene
     .on('postgres_changes', {
       event:  'UPDATE',
       schema: 'public',
       table:  'sessions',
       filter: 'id=eq.' + sessionId,
     }, async (payload) => {
-      const activeSceneId = payload.new.active_scene_id;
+      activeSceneId = payload.new.active_scene_id;
       if (!activeSceneId) return;
 
       const { data: scene } = await sb
@@ -56,7 +60,23 @@ function subscribeToSession(sessionId, campaignId) {
 
       if (scene) broadcastToTabs({ type: 'SCENE_CHANGED', scene });
     })
+    // Scene row updated = DM changed opacity (or watcher updated background)
+    .on('postgres_changes', {
+      event:  'UPDATE',
+      schema: 'public',
+      table:  'scenes',
+      filter: 'campaign_id=eq.' + campaignId,
+    }, (payload) => {
+      // Only broadcast if the changed scene is currently active
+      if (payload.new.id === activeSceneId) {
+        broadcastToTabs({ type: 'SCENE_CHANGED', scene: payload.new });
+      }
+    })
     .subscribe();
+
+  // Load current active scene on startup
+  sb.from('sessions').select('active_scene_id').eq('id', sessionId).single()
+    .then(({ data }) => { if (data) activeSceneId = data.active_scene_id; });
 }
 
 // -------------------------------------------------------------------------
