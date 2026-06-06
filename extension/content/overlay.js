@@ -605,10 +605,13 @@
             min="0" max="1" step="0.05" value="0.3" />
           <span class="dnd-opacity-val" id="dnd-weather-volume-val">30%</span>
         </div>
-        <div class="dnd-music-row" style="margin-top:8px">
-          <span class="dnd-opacity-label" style="white-space:nowrap">&#127925; Standard</span>
-          <input type="text" id="dnd-default-music" class="dnd-field-input"
-            placeholder="URL zur Standard-Musik (kein Pflichtfeld)" style="flex:1;font-size:11px" />
+        <div class="dnd-music-row" style="margin-top:6px">
+          <span class="dnd-opacity-label" style="white-space:nowrap;font-size:11px;color:#6a6050">
+            &#127925; Standard via<br><code>default/</code>-Ordner
+          </span>
+          <span id="dnd-default-music-status" style="font-size:10px;color:#6a6050;flex:1;text-align:right">
+            wird geladen...
+          </span>
         </div>
       </div>
       <hr class="dnd-divider" />
@@ -626,11 +629,10 @@
     `;
 
     // --- Feature 1: Restore saved volumes ---
-    chrome.storage.local.get(['dnd-music-vol', 'dnd-weather-vol', 'dnd-left-offset', 'dnd-default-music'], (r) => {
+    chrome.storage.local.get(['dnd-music-vol', 'dnd-weather-vol', 'dnd-left-offset'], (r) => {
       const musicVol   = r['dnd-music-vol']   ?? 0.8;
       const weatherVol = r['dnd-weather-vol'] ?? 0.3;
       const offset     = r['dnd-left-offset'] ?? 270;
-      const defMusic   = r['dnd-default-music'] ?? '';
 
       const volSlider = body.querySelector('#dnd-volume-slider');
       if (volSlider) {
@@ -649,8 +651,6 @@
         offsetSlider.value = offset;
         body.querySelector('#dnd-left-offset-val').textContent = offset + 'px';
       }
-      const defInput = body.querySelector('#dnd-default-music');
-      if (defInput) defInput.value = defMusic;
     });
 
     // Left offset slider
@@ -682,11 +682,6 @@
       chrome.storage.local.set({ 'dnd-weather-vol': v });
     });
 
-    // Default music input – Feature 5: persist
-    body.querySelector('#dnd-default-music').addEventListener('change', function () {
-      chrome.storage.local.set({ 'dnd-default-music': this.value.trim() });
-    });
-
     body.querySelector('#dnd-music-play').addEventListener('click', () => {
       const activeRow = body.querySelector('.dnd-scene-row.active');
       if (!activeRow) return;
@@ -710,13 +705,29 @@
       renderLogin();
     });
 
-    const [scenesResp, sessionResp, weatherResp, handoutsResp, notesResp] = await Promise.all([
+    const [scenesResp, sessionResp, weatherResp, handoutsResp, notesResp, defaultMusicResp] = await Promise.all([
       chrome.runtime.sendMessage({ type: 'SCENES_LIST', campaignId: profile.campaign_id }),
       chrome.runtime.sendMessage({ type: 'SESSION_GET', campaignId: profile.campaign_id }),
       chrome.runtime.sendMessage({ type: 'WEATHER_PRESETS_LIST', campaignId: profile.campaign_id }),
       chrome.runtime.sendMessage({ type: 'HANDOUTS_LIST', campaignId: profile.campaign_id }),
       chrome.runtime.sendMessage({ type: 'NOTES_GET', campaignId: profile.campaign_id }),
+      chrome.runtime.sendMessage({ type: 'DEFAULT_MUSIC_GET', campaignId: profile.campaign_id }),
     ]);
+
+    // Cache default music URLs for resolveAudioUrl()
+    window._dndDefaultAmbient = defaultMusicResp.ambientUrl || null;
+    window._dndDefaultCombat  = defaultMusicResp.combatUrl  || null;
+
+    // Show status in UI
+    const defStatus = body.querySelector('#dnd-default-music-status');
+    if (defStatus) {
+      const hasAmb = !!defaultMusicResp.ambientUrl;
+      const hasCom = !!defaultMusicResp.combatUrl;
+      defStatus.textContent = hasAmb || hasCom
+        ? `${hasAmb ? '✓ Ambient' : ''}${hasAmb && hasCom ? ' · ' : ''}${hasCom ? '✓ Combat' : ''}`
+        : 'Kein Standard hinterlegt';
+      defStatus.style.color = hasAmb || hasCom ? '#7acc60' : '#6a6050';
+    }
 
     const session        = sessionResp.session;
     const weatherPresets = weatherResp.presets || [];
@@ -819,26 +830,17 @@
     btn.classList.toggle('combat-active', active);
   }
 
-  // Feature 5: resolve audio URL with fallback to default music
+  // Feature 5: resolve audio URL with fallback to default music from DB
   function resolveAudioUrl(scene, isCombat) {
     const url = isCombat
       ? (scene.combat_url || scene.ambient_url)
       : scene.ambient_url;
     if (url) return url;
-    // Fallback: read saved default music URL from storage (synchronously cached)
-    return window._dndDefaultMusic || null;
+    // Fallback: default URLs loaded from campaigns table on DM panel init
+    return isCombat
+      ? (window._dndDefaultCombat || window._dndDefaultAmbient || null)
+      : (window._dndDefaultAmbient || null);
   }
-
-  // Cache default music URL on load
-  chrome.storage.local.get('dnd-default-music', (r) => {
-    window._dndDefaultMusic = r['dnd-default-music'] || null;
-  });
-  // Keep cache updated when DM changes it
-  chrome.storage.onChanged.addListener((changes) => {
-    if (changes['dnd-default-music']) {
-      window._dndDefaultMusic = changes['dnd-default-music'].newValue || null;
-    }
-  });
 
   function renderSceneButtons(scenes, activeSceneId, campaignId, isCombat, weatherPresets = [], onRefresh) {
     const container = document.getElementById('dnd-scenes-container');

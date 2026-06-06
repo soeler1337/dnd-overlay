@@ -181,6 +181,18 @@ async function handleMessage(msg) {
       return { scenes: data };
     }
 
+    case 'DEFAULT_MUSIC_GET': {
+      const { data } = await sb
+        .from('campaigns')
+        .select('default_ambient_url, default_combat_url')
+        .eq('id', msg.campaignId)
+        .single();
+      return {
+        ambientUrl: data?.default_ambient_url ?? null,
+        combatUrl:  data?.default_combat_url  ?? null,
+      };
+    }
+
     case 'SESSION_GET': {
       const session = await fetchSession(msg.campaignId);
       return { session };
@@ -309,11 +321,17 @@ async function resolveCampaignId(gameId, profile) {
 
 async function playSceneAudio(scene, isCombat) {
   const url = isCombat ? (scene.combat_url || scene.ambient_url) : scene.ambient_url;
-  // Feature 5: fall back to persisted default music URL if scene has none
   let audioUrl = url;
-  if (!audioUrl) {
-    const stored = await new Promise(r => chrome.storage.local.get('dnd-default-music', d => r(d['dnd-default-music'] || null)));
-    audioUrl = stored;
+  // Fallback: default music from campaigns table
+  if (!audioUrl && scene.campaign_id) {
+    const { data } = await sb
+      .from('campaigns')
+      .select('default_ambient_url, default_combat_url')
+      .eq('id', scene.campaign_id)
+      .single();
+    audioUrl = isCombat
+      ? (data?.default_combat_url || data?.default_ambient_url)
+      : data?.default_ambient_url;
   }
   if (audioUrl) sendAudio({ type: 'PLAY_MUSIC', url: audioUrl });
   else          sendAudio({ type: 'STOP_MUSIC' });
