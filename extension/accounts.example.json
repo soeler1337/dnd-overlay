@@ -1,0 +1,5 @@
+[
+  { "label": "DM – Dein Name",       "username": "dm",      "password": "passwort" },
+  { "label": "Spieler1 – Kampagne",  "username": "spieler1","password": "passwort" },
+  { "label": "Spieler2 – Kampagne",  "username": "spieler2","password": "passwort" }
+]

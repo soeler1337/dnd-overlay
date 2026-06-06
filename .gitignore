@@ -3,6 +3,7 @@ watcher/.env
 .env
 *.local
 extension/lib/config.js
+extension/accounts.json
 
 # Dependencies
 watcher/node_modules/
