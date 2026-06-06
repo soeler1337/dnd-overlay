@@ -14,8 +14,7 @@
   ],
 
   "background": {
-    "service_worker": "background/service-worker.js",
-    "type": "module"
+    "service_worker": "background/service-worker.js"
   },
 
   "content_scripts": [
@@ -45,7 +44,7 @@
   "web_accessible_resources": [
     {
       "resources": ["offscreen/offscreen.html", "panels/*.js", "lib/*.js"],
-      "matches": ["https://www.dndbeyond.com/games/*"]
+      "matches": ["<all_urls>"]
     }
   ]
 }

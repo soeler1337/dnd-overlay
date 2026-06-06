@@ -99,3 +99,129 @@
   margin: 0;
   font-size: 13px;
 }
+
+/* Forms */
+.dnd-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.dnd-field label {
+  font-size: 11px;
+  color: #c8a45a;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.dnd-field input {
+  all: unset;
+  background: #0d0a04;
+  border: 1px solid #4a3a20;
+  border-radius: 4px;
+  padding: 7px 10px;
+  font-size: 13px;
+  color: #e8dcc8;
+  width: 100%;
+  box-sizing: border-box;
+  transition: border-color 0.15s;
+}
+
+.dnd-field input:focus {
+  border-color: #c8a45a;
+  outline: none;
+}
+
+/* Buttons */
+.dnd-btn {
+  all: unset;
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  width: 100%;
+  box-sizing: border-box;
+  transition: background 0.15s;
+  display: block;
+  margin-top: 4px;
+}
+
+.dnd-btn-primary {
+  background: #7b2d00;
+  color: #e8dcc8;
+  border: 1px solid #c8a45a;
+}
+
+.dnd-btn-primary:hover:not(:disabled) {
+  background: #9e3a00;
+}
+
+.dnd-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.dnd-btn-secondary {
+  background: transparent;
+  color: #8a7a60;
+  border: 1px solid #4a3a20;
+  margin-top: 12px;
+}
+
+.dnd-btn-secondary:hover {
+  border-color: #c8a45a;
+  color: #c8a45a;
+}
+
+/* Error message */
+.dnd-error {
+  color: #e74c3c;
+  font-size: 12px;
+  margin-bottom: 8px;
+  padding: 6px 8px;
+  background: #2c0a0a;
+  border-radius: 4px;
+  border-left: 3px solid #e74c3c;
+}
+
+/* Welcome / role badge */
+.dnd-welcome {
+  margin-bottom: 12px;
+}
+
+.dnd-welcome p {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+
+.dnd-role-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.dnd-role-badge.dm {
+  background: #7b2d00;
+  color: #c8a45a;
+  border: 1px solid #c8a45a44;
+}
+
+.dnd-role-badge.player {
+  background: #0d2640;
+  color: #5ab4c8;
+  border: 1px solid #5ab4c844;
+}
+
+.dnd-divider {
+  border: none;
+  border-top: 1px solid #c8a45a22;
+  margin: 12px 0;
+}
