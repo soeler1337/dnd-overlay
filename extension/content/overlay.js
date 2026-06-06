@@ -54,43 +54,62 @@
 
   // -------------------------------------------------------------------------
   // Lift DDB UI elements above our bg overlays (z-index 50/51).
-  // CSS z-index alone fails because DDB has nested stacking contexts – an
-  // ancestor with z-index < 50 "caps" everything inside it.
-  // Solution: walk the ancestor chain of the target element and raise every
-  // positioned ancestor's z-index above 51.
+  //
+  // CSS z-index on child elements alone doesn't work because DDB wraps them
+  // in ancestor containers that create their own stacking contexts at
+  // z-index < 50, which caps all children in global stacking order.
+  //
+  // Fix: walk every positioned ancestor (including fixed/sticky) and the
+  // element itself, raise z-index to LIFT_Z. Also detect stacking contexts
+  // created by transform/opacity/filter/will-change (not just z-index).
+  // Keep watching so re-renders (React unmount/remount) are handled too.
   // -------------------------------------------------------------------------
-  const DND_OVERLAY_BG_Z = 52; // one above our highest bg overlay
+  const LIFT_Z = 200; // safely above our gif overlay at 51
+
+  function createsStackingContext(cs) {
+    if (cs.position !== 'static' && cs.zIndex !== 'auto') return true;
+    if (cs.position === 'fixed' || cs.position === 'sticky')  return true;
+    if (cs.transform !== 'none')   return true;
+    if (cs.filter    !== 'none')   return true;
+    if (parseFloat(cs.opacity) < 1) return true;
+    if (cs.isolation === 'isolate') return true;
+    if (cs.willChange && cs.willChange !== 'auto') return true;
+    return false;
+  }
 
   function liftAboveBg(classFragment) {
+    const seen = new WeakSet();
+
     function lift(el) {
-      let node = el.parentElement;
+      // Walk the element itself + every ancestor up to <body>
+      let node = el;
       while (node && node !== document.documentElement) {
-        const cs  = window.getComputedStyle(node);
-        const pos = cs.position;
-        if (pos !== 'static') {
-          const zi = parseInt(cs.zIndex);
-          // Only touch nodes whose current z-index would lose against our bg
-          if (isNaN(zi) || zi < DND_OVERLAY_BG_Z) {
-            node.style.setProperty('z-index', String(DND_OVERLAY_BG_Z), 'important');
+        if (!seen.has(node)) {
+          seen.add(node);
+          const cs  = window.getComputedStyle(node);
+          const pos = cs.position;
+          // Give every node that can carry z-index a value above our overlays
+          if (pos !== 'static' || createsStackingContext(cs)) {
+            const zi = parseInt(cs.zIndex);
+            if (isNaN(zi) || zi < LIFT_Z) {
+              node.style.setProperty('z-index', String(LIFT_Z), 'important');
+              // Ensure it has a position so z-index takes effect
+              if (pos === 'static') node.style.setProperty('position', 'relative', 'important');
+            }
           }
         }
         node = node.parentElement;
       }
     }
 
-    let lifted = false;
     function tryLift() {
-      if (lifted) return;
       const el = document.querySelector(`[class*="${classFragment}"]`);
-      if (!el) return;
-      lift(el);
-      lifted = true;
-      obs.disconnect(); // stop observing once lifted
+      if (el) lift(el);
     }
 
-    const obs = new MutationObserver(tryLift);
-    obs.observe(document.body, { childList: true, subtree: true });
-    tryLift(); // try immediately in case element already exists
+    // Retry on every DOM change — handles React re-renders / lazy loading
+    new MutationObserver(tryLift).observe(document.body, { childList: true, subtree: true });
+    tryLift();
   }
 
   // DDB scene-switcher bar (top) and dice-roller toolbar (bottom-right)
