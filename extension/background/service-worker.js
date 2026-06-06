@@ -75,6 +75,11 @@ function subscribeToSession(sessionId, campaignId) {
       if (!activeSceneId) return;
 
       // Reload scene if scene switched OR combat state changed
+      // Broadcast stream_active changes immediately
+      if (payload.old.stream_active !== payload.new.stream_active) {
+        broadcastToTabs({ type: 'STREAM_CHANGED', active: !!payload.new.stream_active });
+      }
+
       if (activeSceneId !== wasActive || payload.old.is_combat !== isCombat) {
         const { data: scene } = await sb
           .from('scenes')
@@ -266,6 +271,15 @@ async function handleMessage(msg) {
       const { error } = await sb
         .from('sessions')
         .update({ is_combat: msg.active, updated_at: new Date().toISOString() })
+        .eq('campaign_id', msg.campaignId);
+      if (error) throw error;
+      return { ok: true };
+    }
+
+    case 'STREAM_TOGGLE': {
+      const { error } = await sb
+        .from('sessions')
+        .update({ stream_active: msg.active, updated_at: new Date().toISOString() })
         .eq('campaign_id', msg.campaignId);
       if (error) throw error;
       return { ok: true };

@@ -576,6 +576,11 @@
         <span class="dnd-role-badge dm">DM</span>
       </div>
       <hr class="dnd-divider" />
+      <div id="dnd-stream-bar" style="margin-bottom:6px">
+        <button class="dnd-btn dnd-stream-btn" id="dnd-stream-btn" data-active="false">
+          &#127909; Stream
+        </button>
+      </div>
       <div id="dnd-initiative-bar">
         <button class="dnd-btn dnd-initiative-btn" id="dnd-initiative-btn" data-active="false">
           &#x2694; Initiative starten
@@ -803,6 +808,18 @@
       notesEditor.value = r.content || '';
     });
 
+    // Wire up stream button
+    const streamBtn = body.querySelector('#dnd-stream-btn');
+    let isStreamActive = session?.stream_active ?? false;
+    updateStreamBtn(streamBtn, isStreamActive);
+    streamBtn.addEventListener('click', async () => {
+      isStreamActive = !isStreamActive;
+      updateStreamBtn(streamBtn, isStreamActive);
+      await chrome.runtime.sendMessage({
+        type: 'STREAM_TOGGLE', active: isStreamActive, campaignId: profile.campaign_id,
+      });
+    });
+
     // Wire up initiative button
     const initBtn = body.querySelector('#dnd-initiative-btn');
     let isCombatActive = session?.is_combat ?? false;
@@ -877,6 +894,12 @@
     btn.dataset.active  = active;
     btn.textContent     = active ? '✓ Initiative läuft - Beenden' : '⚔ Initiative starten';
     btn.classList.toggle('combat-active', active);
+  }
+
+  function updateStreamBtn(btn, active) {
+    btn.dataset.active = active;
+    btn.textContent    = active ? '🔴 Stream läuft – Ausblenden' : '🎥 Stream';
+    btn.classList.toggle('stream-active', active);
   }
 
   // Feature 5: resolve audio URL with fallback to default music from DB
