@@ -40,9 +40,10 @@
   bgOverlay.id = 'dnd-bg-overlay';
   document.body.appendChild(bgOverlay);
 
-  function setBackground(url) {
+  function setBackground(url, opacity) {
     if (url) {
       bgOverlay.style.backgroundImage = `url(${JSON.stringify(url)})`;
+      bgOverlay.style.setProperty('--bg-opacity', opacity ?? 0.5);
       bgOverlay.classList.add('active');
     } else {
       bgOverlay.classList.remove('active');
@@ -110,7 +111,7 @@
   });
 
   function applyScene(scene) {
-    setBackground(scene.background_url || null);
+    setBackground(scene.background_url || null, scene.bg_opacity ?? (scene.is_combat ? 0.25 : 0.5));
     // Audio handled in Milestone 4
     // Update active-scene indicator in DM panel if open
     document.querySelectorAll('.dnd-scene-btn').forEach(btn => {

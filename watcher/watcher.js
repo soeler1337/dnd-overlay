@@ -85,11 +85,15 @@ async function syncScene(sceneDir) {
   const files = fs.readdirSync(sceneDir);
 
   // Read optional scene.json for metadata
-  let meta = { name: folderName, is_combat: false };
+  let meta = { name: folderName, is_combat: false, bg_opacity: null };
   const jsonFile = path.join(sceneDir, 'scene.json');
   if (fs.existsSync(jsonFile)) {
     try { meta = { ...meta, ...JSON.parse(fs.readFileSync(jsonFile, 'utf8')) }; }
     catch { console.warn('[Watcher] Ungueltige scene.json in', folderName); }
+  }
+  // Default opacity: 0.25 for combat, 0.5 for normal - unless overridden in scene.json
+  if (meta.bg_opacity === null) {
+    meta.bg_opacity = meta.is_combat ? 0.25 : 0.5;
   }
 
   const bgFile    = files.find(isImage);
@@ -114,6 +118,7 @@ async function syncScene(sceneDir) {
     background_url:  bgUrl,
     music_track_url: audioUrl,
     is_combat:       meta.is_combat,
+    bg_opacity:      meta.bg_opacity,
   }, { onConflict: 'campaign_id,name' });
 
   if (error) console.error('[Watcher] Szene DB-Fehler:', error.message);
