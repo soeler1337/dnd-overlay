@@ -1,6 +1,43 @@
 /* DnD Overlay - base styles. All selectors are namespaced to avoid
    clashing with DnD Beyond's own CSS. */
 
+/* Soundboard grid */
+.dnd-soundboard {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 4px;
+}
+
+.dnd-sound-btn {
+  all: unset;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid #4a3a20;
+  background: #1a1208;
+  color: #c8b888;
+  transition: background 0.1s, border-color 0.1s, transform 0.08s;
+  white-space: nowrap;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dnd-sound-btn:hover {
+  background: #2a1e0c;
+  border-color: #c8a45a;
+  color: #e8d898;
+}
+
+.dnd-sound-btn.playing {
+  background: #3a2800;
+  border-color: #f0c060;
+  color: #f0d080;
+  transform: scale(0.95);
+}
+
 #dnd-overlay-root {
   all: initial; /* reset inherited styles from DDB page */
   position: fixed;

@@ -372,6 +372,12 @@
       applyScene(msg.scene, msg.isCombat);
     }
     if (msg.type === 'WEATHER_CHANGED') applyWeather(msg.preset);
+    if (msg.type === 'SOUND_PLAY') {
+      // Players play the one-shot locally (SW already plays for DM via offscreen)
+      const sfx = new Audio(msg.url);
+      sfx.volume = msg.volume ?? 0.9;
+      sfx.play().catch(() => {});
+    }
     if (msg.type === 'NOTES_CHANGED') {
       updateNotesViewer(msg.content);
       // Update DM notes editor value if present
@@ -582,6 +588,8 @@
       <hr class="dnd-divider" />
       <div id="dnd-handouts-container"></div>
       <hr class="dnd-divider" />
+      <div id="dnd-sounds-container"></div>
+      <hr class="dnd-divider" />
       <div id="dnd-notes-container">
         <p class="dnd-section-label">Notizen
           <button class="dnd-btn-refresh" id="dnd-notes-refresh" title="Notizen neu laden">&#8635;</button>
@@ -705,13 +713,14 @@
       renderLogin();
     });
 
-    const [scenesResp, sessionResp, weatherResp, handoutsResp, notesResp, defaultMusicResp] = await Promise.all([
+    const [scenesResp, sessionResp, weatherResp, handoutsResp, notesResp, defaultMusicResp, soundsResp] = await Promise.all([
       chrome.runtime.sendMessage({ type: 'SCENES_LIST', campaignId: profile.campaign_id }),
       chrome.runtime.sendMessage({ type: 'SESSION_GET', campaignId: profile.campaign_id }),
       chrome.runtime.sendMessage({ type: 'WEATHER_PRESETS_LIST', campaignId: profile.campaign_id }),
       chrome.runtime.sendMessage({ type: 'HANDOUTS_LIST', campaignId: profile.campaign_id }),
       chrome.runtime.sendMessage({ type: 'NOTES_GET', campaignId: profile.campaign_id }),
       chrome.runtime.sendMessage({ type: 'DEFAULT_MUSIC_GET', campaignId: profile.campaign_id }),
+      chrome.runtime.sendMessage({ type: 'SOUNDS_LIST', campaignId: profile.campaign_id }),
     ]);
 
     // Cache default music URLs for resolveAudioUrl()
@@ -822,6 +831,7 @@
       doRefreshScenes,
     );
     renderHandouts(handoutsResp.handouts || [], doRefreshHandouts);
+    renderSoundboard(soundsResp.sounds || [], profile.campaign_id);
   }
 
   function updateInitiativeBtn(btn, active) {
@@ -977,6 +987,63 @@
       }
 
       container.appendChild(wrap);
+    });
+  }
+
+  // -- renderSoundboard ------------------------------------------------------
+  function renderSoundboard(sounds, campaignId) {
+    const container = document.getElementById('dnd-sounds-container');
+    if (!container) return;
+
+    if (!sounds.length) {
+      container.innerHTML = `
+        <p class="dnd-section-label">Soundboard</p>
+        <p class="dnd-placeholder">Keine Sounds. Lege <code>.mp3</code>-Dateien in<br><code>content/${campaignId.slice(0,8)}…/sounds/</code> ab.</p>
+      `;
+      return;
+    }
+
+    container.innerHTML = `<p class="dnd-section-label">Soundboard</p>
+      <div class="dnd-soundboard"></div>`;
+
+    const grid = container.querySelector('.dnd-soundboard');
+    const volKey = 'dnd-sfx-vol';
+
+    // Volume row
+    const volRow = document.createElement('div');
+    volRow.className = 'dnd-music-row';
+    volRow.style.marginBottom = '6px';
+    volRow.innerHTML = `
+      <span class="dnd-opacity-label">&#128266; Lautst.</span>
+      <input type="range" class="dnd-opacity-slider" id="dnd-sfx-vol-slider" min="0" max="1" step="0.05" value="0.9" />
+      <span class="dnd-opacity-val" id="dnd-sfx-vol-val">90%</span>
+    `;
+    container.insertBefore(volRow, grid);
+
+    chrome.storage.local.get(volKey, (r) => {
+      const v = r[volKey] ?? 0.9;
+      volRow.querySelector('#dnd-sfx-vol-slider').value = v;
+      volRow.querySelector('#dnd-sfx-vol-val').textContent = Math.round(v * 100) + '%';
+    });
+    volRow.querySelector('#dnd-sfx-vol-slider').addEventListener('input', function () {
+      const v = parseFloat(this.value);
+      volRow.querySelector('#dnd-sfx-vol-val').textContent = Math.round(v * 100) + '%';
+      chrome.storage.local.set({ [volKey]: v });
+    });
+
+    sounds.forEach(s => {
+      const btn = document.createElement('button');
+      btn.className = 'dnd-sound-btn';
+      btn.title = s.name;
+      btn.textContent = s.name;
+      btn.addEventListener('click', () => {
+        const vol = parseFloat(volRow.querySelector('#dnd-sfx-vol-slider').value ?? 0.9);
+        chrome.runtime.sendMessage({ type: 'SOUND_PLAY', url: s.url, volume: vol });
+        // Visual flash feedback
+        btn.classList.add('playing');
+        setTimeout(() => btn.classList.remove('playing'), 600);
+      });
+      grid.appendChild(btn);
     });
   }
 

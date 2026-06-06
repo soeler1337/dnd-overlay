@@ -280,6 +280,24 @@ async function handleMessage(msg) {
       return { ok: true };
     }
 
+    case 'SOUNDS_LIST': {
+      const { data, error } = await sb
+        .from('sounds')
+        .select('id, name, url')
+        .eq('campaign_id', msg.campaignId)
+        .order('name');
+      if (error) throw error;
+      return { sounds: data || [] };
+    }
+
+    case 'SOUND_PLAY': {
+      // Broadcast to all tabs so everyone hears it
+      broadcastToTabs({ type: 'SOUND_PLAY', url: msg.url, volume: msg.volume ?? 0.9 });
+      // Also play in offscreen for the DM's tab
+      await sendAudio({ type: 'PLAY_SOUND', url: msg.url, volume: msg.volume ?? 0.9 });
+      return { ok: true };
+    }
+
     case 'NOTES_GET': {
       const { data } = await sb
         .from('campaign_notes')

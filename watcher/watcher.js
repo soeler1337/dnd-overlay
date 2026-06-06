@@ -238,6 +238,31 @@ async function syncHandout(handoutDir, campaignId, gameId) {
 }
 
 // -------------------------------------------------------------------------
+// Sounds sync  (content/<game-id>/sounds/<name>.mp3  — flat folder)
+// -------------------------------------------------------------------------
+async function syncSounds(gameDir, campaignId, gameId) {
+  const soundsDir = path.join(gameDir, 'sounds');
+  if (!fs.existsSync(soundsDir)) return;
+
+  for (const file of fs.readdirSync(soundsDir)) {
+    if (!isAudio(file)) continue;
+    const name = path.basename(file, path.extname(file));
+    console.log(`[Watcher] Sound: ${gameId}/sounds/${file}`);
+    const url = await uploadFile(
+      'music',
+      sanitizePath(`${campaignId}/sounds/${file}`),
+      path.join(soundsDir, file),
+    );
+    const { error } = await sb.from('sounds').upsert(
+      { campaign_id: campaignId, name, url },
+      { onConflict: 'campaign_id,name' },
+    );
+    if (error) console.error('[Watcher] Sound DB-Fehler:', error.message);
+    else console.log(`[Watcher] Sound synced: ${name}`);
+  }
+}
+
+// -------------------------------------------------------------------------
 // Default music sync  (content/<game-id>/default/ambient/ + combat/)
 // -------------------------------------------------------------------------
 async function syncDefault(gameDir, campaignId, gameId) {
@@ -297,6 +322,10 @@ async function syncGameFolder(gameDir) {
   // Default-Musik (kein Pflichtordner)
   await syncDefault(gameDir, campaignId, gameId).catch(e =>
     console.error('[Watcher] Fehler Default-Musik:', e.message));
+
+  // Sounds (kein Pflichtordner)
+  await syncSounds(gameDir, campaignId, gameId).catch(e =>
+    console.error('[Watcher] Fehler Sounds:', e.message));
 
   for (const entry of fs.readdirSync(scenesDir)) {
     const full = path.join(scenesDir, entry);
@@ -433,6 +462,18 @@ function startWatcher() {
         debounce[key] = setTimeout(async () => {
           await syncDefault(gameDir, campaignId, gameId).catch(e =>
             console.error('[Watcher] Sync-Fehler Default:', e.message));
+        }, 800);
+      });
+
+      const soundsDir = path.join(gameDir, 'sounds');
+      fs.mkdirSync(soundsDir, { recursive: true });
+      fs.watch(soundsDir, { recursive: false }, (t, f) => {
+        if (!f) return;
+        const key = `${gameId}:sounds:${f}`;
+        clearTimeout(debounce[key]);
+        debounce[key] = setTimeout(async () => {
+          await syncSounds(gameDir, campaignId, gameId).catch(e =>
+            console.error('[Watcher] Sync-Fehler Sounds:', e.message));
         }, 800);
       });
     });

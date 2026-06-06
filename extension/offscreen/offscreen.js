@@ -1,8 +1,12 @@
 // Offscreen Document - audio playback for MV3.
-// Two independent channels: scene music + weather ambient.
+// Three channels: scene music (loop) + weather (loop) + one-shot soundboard.
 
 const music   = new Audio(); music.loop   = true;
 const weather = new Audio(); weather.loop = true;
+// Soundboard: pool of short Audio objects for overlapping one-shots
+const SFX_POOL_SIZE = 4;
+const sfxPool = Array.from({ length: SFX_POOL_SIZE }, () => new Audio());
+let sfxIdx = 0;
 
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.target !== 'offscreen') return;
@@ -38,6 +42,17 @@ chrome.runtime.onMessage.addListener((msg) => {
     case 'SET_WEATHER_VOLUME':
       weather.volume = Math.max(0, Math.min(1, msg.volume));
       break;
+
+    case 'PLAY_SOUND': {
+      // One-shot, round-robin pool so multiple sounds can overlap
+      const sfx = sfxPool[sfxIdx % SFX_POOL_SIZE];
+      sfxIdx++;
+      sfx.src    = msg.url;
+      sfx.volume = Math.max(0, Math.min(1, msg.volume ?? 0.9));
+      sfx.currentTime = 0;
+      sfx.play().catch(e => console.warn('[Offscreen] sfx play blocked:', e.message));
+      break;
+    }
 
     // Legacy - keep for backwards compat
     case 'PLAY_AUDIO':
