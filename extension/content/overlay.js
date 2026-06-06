@@ -791,13 +791,14 @@
           profile.campaign_id,
           combatActive,
           weatherPresets,
+          doRefreshScenes,
         );
       });
     }
 
     function doRefreshHandouts() {
       chrome.runtime.sendMessage({ type: 'HANDOUTS_LIST', campaignId: profile.campaign_id }).then(r => {
-        renderHandouts(r.handouts || []);
+        renderHandouts(r.handouts || [], doRefreshHandouts);
       });
     }
 
@@ -1092,7 +1093,7 @@
 
     function doRefreshHandouts() {
       chrome.runtime.sendMessage({ type: 'HANDOUTS_LIST', campaignId: profile.campaign_id }).then(r => {
-        renderHandouts(r.handouts || [], doRefreshHandouts);
+        renderHandouts(r.handouts || [], doRefreshHandouts); // pass itself so button persists
       });
     }
     renderHandouts(handoutsResp.handouts || [], doRefreshHandouts);
