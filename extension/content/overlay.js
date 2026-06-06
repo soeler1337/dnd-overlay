@@ -234,6 +234,7 @@
       <div id="dnd-music-controls">
         <p class="dnd-section-label">Musik</p>
         <div class="dnd-music-row">
+          <button class="dnd-btn dnd-music-btn" id="dnd-music-play" title="Play">&#9654;</button>
           <button class="dnd-btn dnd-music-btn" id="dnd-music-stop" title="Stop">&#9646;&#9646;</button>
           <input type="range" id="dnd-volume-slider" class="dnd-opacity-slider"
             min="0" max="1" step="0.05" value="0.8" />
@@ -282,6 +283,18 @@
       chrome.runtime.sendMessage({ type: 'AUDIO_VOLUME', volume: v });
     });
 
+    body.querySelector('#dnd-music-play').addEventListener('click', () => {
+      const activeRow = body.querySelector('.dnd-scene-row.active');
+      if (!activeRow) return;
+      const sceneId   = activeRow.dataset.sceneId;
+      const scene     = (window._dndScenes || []).find(s => s.id === sceneId);
+      if (!scene) return;
+      const isCombat  = body.querySelector('#dnd-initiative-btn')?.dataset.active === 'true';
+      const url       = isCombat ? (scene.combat_url || scene.ambient_url) : scene.ambient_url;
+      const vol       = parseFloat(body.querySelector('#dnd-volume-slider')?.value ?? 0.8);
+      if (url) chrome.runtime.sendMessage({ type: 'AUDIO_PLAY', url, volume: vol });
+    });
+
     body.querySelector('#dnd-music-stop').addEventListener('click', () => {
       chrome.runtime.sendMessage({ type: 'AUDIO_STOP' });
     });
@@ -326,8 +339,9 @@
       }
     });
 
+    window._dndScenes = scenesResp.scenes || [];
     renderSceneButtons(
-      scenesResp.scenes || [],
+      window._dndScenes,
       session?.active_scene_id || null,
       profile.campaign_id,
       session?.is_combat ?? false
