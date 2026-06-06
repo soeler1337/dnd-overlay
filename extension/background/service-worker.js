@@ -392,8 +392,13 @@ async function playSceneAudio(scene, isCombat) {
     }
   }
 
-  if (audioUrl) sendAudio({ type: 'PLAY_MUSIC', url: audioUrl });
-  else          sendAudio({ type: 'STOP_MUSIC' });
+  if (!audioUrl) { sendAudio({ type: 'STOP_MUSIC' }); return; }
+
+  // Read persisted volume so realtime-triggered playback respects user setting.
+  const vol = await new Promise(r =>
+    chrome.storage.local.get('dnd-music-vol', d => r(d['dnd-music-vol'] ?? 0.8))
+  );
+  sendAudio({ type: 'PLAY_MUSIC', url: audioUrl, volume: vol });
 }
 
 async function fetchProfile(userId) {

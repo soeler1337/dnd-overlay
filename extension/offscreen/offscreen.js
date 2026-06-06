@@ -15,7 +15,7 @@ chrome.runtime.onMessage.addListener((msg) => {
 
     case 'PLAY_MUSIC':
       if (msg.url && music.src !== msg.url) music.src = msg.url;
-      music.volume = msg.volume ?? 0.8;
+      if (msg.volume !== undefined) music.volume = msg.volume;
       music.play().catch(e => console.warn('[Offscreen] music play blocked:', e.message));
       break;
 
@@ -30,7 +30,7 @@ chrome.runtime.onMessage.addListener((msg) => {
 
     case 'PLAY_WEATHER':
       if (msg.url && weather.src !== msg.url) weather.src = msg.url;
-      weather.volume = msg.volume ?? 0.4;
+      if (msg.volume !== undefined) weather.volume = msg.volume;
       weather.play().catch(e => console.warn('[Offscreen] weather play blocked:', e.message));
       break;
 
