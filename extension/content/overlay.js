@@ -487,6 +487,12 @@
     if (msg.type === 'SCENE_CHANGED') {
       combatActive = !!msg.isCombat;
       applyScene(msg.scene, msg.isCombat);
+      // Play audio for the new scene (SW handles URL resolution + default fallback)
+      chrome.runtime.sendMessage({
+        type: 'SCENE_AUDIO_PLAY',
+        sceneId: msg.scene.id,
+        isCombat: !!msg.isCombat,
+      }).catch(() => {});
     }
     if (msg.type === 'WEATHER_CHANGED') applyWeather(msg.preset);
     if (msg.type === 'SOUND_PLAY') {
@@ -1479,8 +1485,10 @@
       chrome.runtime.sendMessage({ type: 'DEFAULT_MUSIC_GET', campaignId: profile.campaign_id }),
     ]);
 
-    // Cache default background so applyScene fallback works for players too
+    // Cache default assets so resolveAudioUrl fallback works for players too
     window._dndDefaultBackground = defaultResp.backgroundUrl || null;
+    window._dndDefaultAmbient    = defaultResp.ambientUrl    || null;
+    window._dndDefaultCombat     = defaultResp.combatUrl     || null;
 
     // Apply the currently active scene immediately (don't wait for DM to switch)
     const session = sessionResp.session;
@@ -1546,7 +1554,16 @@
 
   // Keep the service worker alive so the Supabase Realtime subscription
   // doesn't get lost when Chrome suspends the MV3 SW after ~30 s of inactivity.
-  setInterval(() => chrome.runtime.sendMessage({ type: 'PING' }).catch(() => {}), 20000);
+  // Wrapped in try/catch: chrome.runtime.sendMessage throws synchronously when
+  // the extension is reloaded while the page stays open ("context invalidated").
+  const _pingInterval = setInterval(() => {
+    try {
+      chrome.runtime.sendMessage({ type: 'PING' }).catch(() => {});
+    } catch (e) {
+      // Extension was reloaded – stop pinging, nothing we can do until page reload
+      clearInterval(_pingInterval);
+    }
+  }, 20000);
 
   function esc(str) {
     if (!str) return '';
