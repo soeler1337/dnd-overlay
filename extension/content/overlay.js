@@ -119,20 +119,9 @@
   // DDB scene-switcher bar (top) – z-index lift works for this element
   liftAboveBg('scenarioMenuEncounters');
 
-  // Reset any inline right-margin left over from previous approach
-  bgOverlay.style.right  = '';
-  gifOverlay.style.right = '';
-  bgOverlay.style.clipPath  = '';
-  gifOverlay.style.clipPath = '';
-
-  // DDB toolbar panels are covered by our overlay but still clickable
-  // (pointer-events: none on the overlays). We show a subtle dashed-border
-  // marker so the DM can see exactly where to click through the overlay.
-  // Class names confirmed via DevTools:
-  //   styles-module__J127eW__topRight     (top-right controls)
-  //   styles-module__J127eW__right        (right-side controls)
-  //   styles-module__J127eW__bottomRight  (dice roller, bottom-right)
-  markToolbarArea(['__topRight', '__right', '__bottomRight']);
+  // The DDB game header (top bar, h=64px) is left uncovered because the
+  // overlays start at top:64px (set in CSS). No JS workaround needed for
+  // the roll-privacy dropdown and other top-bar controls.
 
   function setBackground(url, opacity) {
     if (url) {
@@ -531,52 +520,6 @@
     }
   }
 
-  // -------------------------------------------------------------------------
-  // Show a subtle dashed-border marker over the DDB toolbar area so the DM
-  // knows where to click through the (pointer-events:none) overlay.
-  // The marker itself is also pointer-events:none and lives above the overlays.
-  // RAF-debounced to avoid layout thrashing during React re-renders.
-  // -------------------------------------------------------------------------
-  function markToolbarArea(classFragments) {
-    const marker = document.createElement('div');
-    marker.id = 'dnd-toolbar-marker';
-    document.body.appendChild(marker);
-
-    let rafId = null;
-
-    function update() {
-      const els = classFragments
-        .map(f => document.querySelector(`[class*="${f}"]`))
-        .filter(Boolean);
-
-      if (!els.length) { marker.style.display = 'none'; return; }
-
-      const rects = els.map(el => el.getBoundingClientRect())
-                       .filter(r => r.width > 0 && r.height > 0);
-      if (!rects.length) { marker.style.display = 'none'; return; }
-
-      // Union bounding box of all toolbar elements
-      const top    = Math.min(...rects.map(r => r.top));
-      const left   = Math.min(...rects.map(r => r.left));
-      const right  = Math.max(...rects.map(r => r.right));
-      const bottom = Math.max(...rects.map(r => r.bottom));
-
-      marker.style.display = 'block';
-      marker.style.top     = top  + 'px';
-      marker.style.left    = left + 'px';
-      marker.style.width   = (right - left) + 'px';
-      marker.style.height  = (bottom - top) + 'px';
-    }
-
-    function schedule() {
-      if (rafId) return;
-      rafId = requestAnimationFrame(() => { rafId = null; update(); });
-    }
-
-    new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true });
-    window.addEventListener('resize', schedule);
-    update();
-  }
 
   // -------------------------------------------------------------------------
   // Auth & panels

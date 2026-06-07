@@ -402,7 +402,7 @@
    ========================================================= */
 #dnd-bg-overlay {
   position: fixed;
-  top: 0; right: 0; bottom: 0;
+  top: 64px; right: 0; bottom: 0;
   left: 270px;
   z-index: 50;
   background-size: cover;
@@ -420,7 +420,7 @@
 
 #dnd-gif-overlay {
   position: fixed;
-  top: 0; right: 0; bottom: 0;
+  top: 64px; right: 0; bottom: 0;
   left: 270px;
   z-index: 51;
   background-size: cover;
@@ -892,20 +892,7 @@
 .dnd-notes-rendered code { background: var(--dnd-bg0); padding: 1px 5px; border-radius: 3px; font-size: 11px; }
 
 
-/* DDB scene-switcher bar is lifted via liftAboveBg() in overlay.js.
-   DDB toolbar panels are marked with a dashed overlay so the DM can find
-   the click-through area (overlays have pointer-events:none, so clicking
-   through them always works – the marker just makes the area visible). */
-
-#dnd-toolbar-marker {
-  position: fixed;
-  z-index: 52;            /* above gif-overlay (51) */
-  pointer-events: none;   /* never blocks clicks */
-  display: none;
-  border: 1px dashed rgba(200, 164, 90, 0.55);
-  border-radius: 8px;
-  /* very slight lightening so buttons beneath are a bit more legible */
-  background: rgba(255, 255, 255, 0.04);
-  /* tiny ⚙ label in the top-left corner of the marker box */
-  box-shadow: inset 0 0 0 1px rgba(200, 164, 90, 0.12);
-}
+/* The DDB game header (top 64px) is fully uncovered because both overlays
+   start at top:64px. The scene-switcher bar (scenarioMenuEncounters) is
+   additionally lifted via liftAboveBg() so its dropdown list, which opens
+   below the header into the overlay area, still appears on top. */

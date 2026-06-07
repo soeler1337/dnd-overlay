@@ -1,97 +1,122 @@
 # DnD Overlay
 
-Chrome Extension (MV3) als Overlay ueber DnD Beyond Spielsitzungen.
-Realtime-Sync ueber Supabase: DM schaltet Szenen, Musik und Initiative -
-alle Spieler sehen die Aenderung sofort.
+Chrome Extension (MV3) als Overlay fuer DnD Beyond Spielsitzungen (`dndbeyond.com/games/[game-id]`).
+Realtime-Sync ueber Supabase: DM schaltet Szenen, Musik und Initiative – alle Spieler sehen die Aenderung sofort.
 
 ---
 
-## Voraussetzungen
+## Features
 
-- Google Chrome (aktuell)
-- [Supabase](https://supabase.com) Account (kostenloser Free Tier reicht)
-- Node.js ist **nicht** benoetigt - keine Build-Pipeline, reines Vanilla JS
-
----
-
-## 1. Supabase-Projekt anlegen
-
-1. Unter [supabase.com](https://supabase.com) einloggen und **New Project** klicken.
-2. Name z. B. `dnd-overlay`, Region nach Wahl (Frankfurt empfohlen fuer DE).
-3. Warte bis das Projekt bereit ist (ca. 1-2 Min).
-4. Gehe zu **Project Settings > API** und notiere:
-   - `Project URL` (sieht aus wie `https://xxxx.supabase.co`)
-   - `anon public` Key (langer JWT-String)
+| Feature | DM | Spieler |
+|---|---|---|
+| Hintergrundbild je Szene | schalten | sehen |
+| Umgebungsmusik / Kampfmusik | steuern | hoeren |
+| Wetter-GIF + Wettergeraeusche | schalten | sehen/hoeren |
+| Initiative starten / beenden | | |
+| Handouts anzeigen (Zoom, Pan) | oeffnen & streamen | oeffnen |
+| Soundboard (Einzel-SFX) | abspielen | hoeren |
+| Kampagnen-Notizen (Markdown) | schreiben | lesen |
+| Lautstaerke & Layout-Offset | | je selbst |
+| Stream-Overlay (OBS) | hintergrund + handout + wetter + wuerfellog | – |
 
 ---
 
-## 2. Datenbank-Schema einrichten
+## Installation
 
-1. Im Supabase-Dashboard: **SQL Editor** oeffnen.
-2. Inhalt von [`supabase/migrations/001_initial_schema.sql`](supabase/migrations/001_initial_schema.sql) komplett hineinkopieren.
-3. **Run** klicken - alle Tabellen, Trigger und Realtime-Einstellungen werden angelegt.
+### 1. Extension in Chrome laden
 
-> RLS (Row Level Security) wird in Milestone 2 als separate Migration ergaenzt.
+1. `chrome://extensions` oeffnen
+2. **Entwicklermodus** einschalten (oben rechts)
+3. **Entpackte Erweiterung laden** → Ordner `extension/` auswaehlen
+4. Keine Fehlermeldung = Erfolg
+5. `https://www.dndbeyond.com/games/5570639` oeffnen
+6. Unten rechts erscheint ein roter **DnD**-Button
 
----
+### 2. Accounts anlegen
 
-## 3. Extension-Konfiguration
+Erstelle `extension/accounts.json` (wird nicht ins Git committed):
 
-Kopiere die Datei `extension/lib/config.example.js` zu `extension/lib/config.js`
-und trage deine Supabase-Daten ein:
-
-```js
-// extension/lib/config.js
-export const SUPABASE_URL = 'https://xxxx.supabase.co';
-export const SUPABASE_ANON_KEY = 'dein-anon-key';
+```json
+[
+  { "label": "Soeler (DM)", "username": "soeler", "password": "dein-passwort" },
+  { "label": "Spieler 1",   "username": "spieler1", "password": "passwort" }
+]
 ```
 
-> `config.js` ist in `.gitignore` - sie wird nie ins Repo committed.
+`username` muss exakt dem Supabase-Profil entsprechen (ohne `@dnd-overlay.local`).
+
+### 3. Extension nach Code-Aenderungen aktualisieren
+
+1. `chrome://extensions` → Reload-Symbol der Extension klicken
+2. DDB-Tab neu laden (`F5`)
 
 ---
 
-## 4. Extension lokal laden (Entwicklermodus)
+## Stream Overlay (OBS)
 
-1. Chrome oeffnen, in Adresszeile `chrome://extensions` eingeben.
-2. Oben rechts **Entwicklermodus** einschalten.
-3. **Entpackte Erweiterung laden** klicken.
-4. Den Ordner `extension/` (nicht das Repo-Root) auswaehlen.
-5. Die Extension erscheint in der Liste - keine Fehlermeldung = Erfolg.
-6. Oeffne `https://www.dndbeyond.com/games/[deine-game-id]`.
-7. Unten rechts erscheint ein roter **DnD**-Button - Klick oeffnet das Panel.
+Als Browser-Quelle in OBS hinzufuegen:
 
-Nach Code-Aenderungen in der Extension: auf der `chrome://extensions`-Seite
-auf den Reload-Pfeil der Extension klicken, dann DDB-Tab neu laden.
+```
+URL:    https://soeler1337.github.io/dnd-overlay/stream-overlay.html?game=5570639
+Breite: 1920
+Hoehe:  1080
+Hintergrund: transparent (Haken setzen)
+```
 
----
-
-## 5. Storage Buckets anlegen (Milestone 4+)
-
-Im Supabase-Dashboard unter **Storage** drei Buckets erstellen:
-
-| Bucket-Name    | Public |
-|----------------|--------|
-| `backgrounds`  | ja     |
-| `music`        | nein   |
-| `handouts`     | nein   |
+Das Overlay zeigt automatisch:
+- Hintergrundbild der aktiven Szene
+- Wetter-GIF
+- Gespiegelte Handouts (wenn DM eins oeffnet)
+- Wuerfellog (letzte 5 Wuerfe, 18 Sek. sichtbar)
 
 ---
 
-## Milestone-Uebersicht
+## Watcher (Medien-Upload)
 
-| # | Inhalt                                        | Status   |
-|---|-----------------------------------------------|----------|
-| 1 | Extension-Geruest, Overlay-Shell auf DDB       | fertig   |
-| 2 | Supabase Auth, Login-Panel, Rollenunterscheidung | offen  |
-| 3 | Szenen-Schalter mit Realtime-Sync              | offen    |
-| 4 | Musik via Offscreen Document                  | offen    |
-| 5 | Initiative-Tracker                            | offen    |
-| 6 | Handouts mit Freigabe pro Spieler / alle      | offen    |
+Der Watcher beobachtet den `content/`-Ordner und laedt neue Dateien automatisch in Supabase Storage hoch.
+
+```
+content/
+  scenes/
+    Szene A/
+      ambient.mp3      # Umgebungsmusik
+      combat.mp3       # Kampfmusik
+      background.jpg   # Hintergrundbild
+  default/
+    ambient.mp3        # Standard-Ambient (falls Szene kein eigenes hat)
+    combat.mp3         # Standard-Kampf
+  sounds/
+    Feuerball.mp3      # Soundboard-SFX
+  handouts/
+    Karte.png
+  weather/
+    regen.gif
+    regen.mp3
+```
+
+Watcher starten:
+
+```bash
+cd watcher
+cp .env.example .env   # Supabase URL + Service Key eintragen
+npm install
+node watcher.js
+```
 
 ---
 
-## Spaetere Veroeffentlichung (Unlisted)
+## Datenbankstruktur (Supabase)
 
-Die Extension wird im Chrome Web Store als **Unlisted** veroeffentlicht -
-nur Personen mit dem direkten Link koennen sie installieren.
-Anleitung folgt nach Milestone 6.
+Tabellen: `profiles`, `campaigns`, `sessions`, `scenes`, `handouts`, `sounds`, `weather_presets`, `campaign_notes`, `dice_rolls`
+
+Migrationen liegen in `supabase/migrations/`. Im Supabase SQL-Editor ausfuehren.
+
+---
+
+## Layout-Hinweis
+
+Die Overlays (Hintergrundbild + Wetter) starten bei:
+- **Links:** `270px` (Standard, schuetzt die DnD-Beyond-Seitenleiste) – per Slider im Panel anpassbar
+- **Oben:** `64px` (DDB-Kopfzeile mit Szenen-Dropdown, Wuerfel-Datenschutz usw. bleibt immer frei)
+
+Die DDB-Kopfzeile und die linke Tool-Leiste sind immer erreichbar und werden vom Overlay nicht verdeckt.
