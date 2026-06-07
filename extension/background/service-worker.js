@@ -249,7 +249,15 @@ async function handleMessage(msg) {
         console.error('[SW] SCENE_SWITCH DB error:', error.message);
         throw error;
       }
-      console.log('[SW] SCENE_SWITCH DB update OK – waiting for Realtime...');
+      // Broadcast immediately to all local tabs (same browser / incognito).
+      // Remote players on other devices receive it via the Realtime subscription.
+      const { data: scene } = await sb.from('scenes').select('*').eq('id', msg.sceneId).single();
+      if (scene) {
+        const isCombat = !!(msg.isCombat ?? false);
+        broadcastToTabs({ type: 'SCENE_CHANGED', scene, isCombat });
+        playSceneAudio(scene, isCombat);
+        console.log('[SW] SCENE_SWITCH broadcast done →', scene.name);
+      }
       return { ok: true };
     }
 

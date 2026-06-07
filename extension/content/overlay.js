@@ -750,7 +750,7 @@
             const audioUrl = resolveAudioUrl(fallback, combatActive);
             if (audioUrl) chrome.runtime.sendMessage({ type: 'AUDIO_PLAY', url: audioUrl, volume: vol }).catch(() => {});
             else          chrome.runtime.sendMessage({ type: 'AUDIO_STOP' }).catch(() => {});
-            chrome.runtime.sendMessage({ type: 'SCENE_SWITCH', sceneId: fallback.id, campaignId }).catch(() => {});
+            chrome.runtime.sendMessage({ type: 'SCENE_SWITCH', sceneId: fallback.id, campaignId, isCombat: combatActive }).catch(() => {});
           }
         } else {
           // No Default scene → show default background, play default ambient or stop
@@ -784,7 +784,7 @@
       if (audioUrl) chrome.runtime.sendMessage({ type: 'AUDIO_PLAY', url: audioUrl, volume: vol }).catch(() => {});
       else          chrome.runtime.sendMessage({ type: 'AUDIO_STOP' }).catch(() => {});
 
-      chrome.runtime.sendMessage({ type: 'SCENE_SWITCH', sceneId: match.id, campaignId })
+      chrome.runtime.sendMessage({ type: 'SCENE_SWITCH', sceneId: match.id, campaignId, isCombat: combatActive })
         .catch(() => {});
     }
 
@@ -1296,7 +1296,7 @@
       wrap.querySelector('.dnd-scene-btn').addEventListener('click', async () => {
         document.querySelectorAll('.dnd-scene-row').forEach(r => r.classList.remove('active'));
         wrap.classList.add('active');
-        await chrome.runtime.sendMessage({ type: 'SCENE_SWITCH', sceneId: scene.id, campaignId });
+        await chrome.runtime.sendMessage({ type: 'SCENE_SWITCH', sceneId: scene.id, campaignId, isCombat: combatActive });
         const vol    = parseFloat(body.querySelector('#dnd-volume-slider')?.value ?? 0.8);
         const combat = combatActive;
 
