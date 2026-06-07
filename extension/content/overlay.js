@@ -494,6 +494,17 @@
         isCombat: !!msg.isCombat,
       }).catch(() => {});
     }
+    if (msg.type === 'SCENE_CLEARED') {
+      // DM switched to a DDB scene with no overlay match → show default background
+      _activeDmScene = null;
+      const defBg = window._dndDefaultBackground || null;
+      setBackground(defBg, defBg ? 1 : 0);
+      const vol = parseFloat(document.getElementById('dnd-player-music-vol')?.value
+                          ?? document.getElementById('dnd-volume-slider')?.value ?? 0.8);
+      const defAmbient = window._dndDefaultAmbient || null;
+      if (defAmbient) chrome.runtime.sendMessage({ type: 'AUDIO_PLAY', url: defAmbient, volume: vol }).catch(() => {});
+      else            chrome.runtime.sendMessage({ type: 'AUDIO_STOP' }).catch(() => {});
+    }
     if (msg.type === 'WEATHER_CHANGED') applyWeather(msg.preset);
     if (msg.type === 'SOUND_PLAY') {
       // Players play the one-shot locally (SW already plays for DM via offscreen)
@@ -768,6 +779,8 @@
             bgToggle.textContent = defBg ? 'AN' : 'AUS';
             bgToggle.className = 'dnd-scene-toggle ' + (defBg ? 'on' : 'off');
           }
+          // Sync to players: broadcast SCENE_CLEARED so they also show default background
+          chrome.runtime.sendMessage({ type: 'SCENE_CLEAR', campaignId }).catch(() => {});
         }
         return;
       }

@@ -239,6 +239,13 @@ async function handleMessage(msg) {
       return { session };
     }
 
+    case 'SCENE_CLEAR': {
+      // DM switched to a DDB scene with no overlay match and no Default scene.
+      // Broadcast to all local tabs so players also show the default background.
+      broadcastToTabs({ type: 'SCENE_CLEARED' });
+      return { ok: true };
+    }
+
     case 'SCENE_SWITCH': {
       console.log('[SW] SCENE_SWITCH sceneId:', msg.sceneId, 'campaignId:', msg.campaignId);
       const { error } = await sb
