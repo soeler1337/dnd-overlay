@@ -45,12 +45,10 @@
   gifOverlay.id = 'dnd-gif-overlay';
   document.body.appendChild(gifOverlay);
 
-  // Restore saved left offset (protects character sheet sidebar)
-  chrome.storage.local.get('dnd-left-offset', (r) => {
-    const offset = r['dnd-left-offset'] ?? 270;
-    bgOverlay.style.left  = offset + 'px';
-    gifOverlay.style.left = offset + 'px';
-  });
+  // Sidebar is lifted above overlays via CSS injection (z-index:200),
+  // so no left-offset needed. Start overlays from the left edge.
+  bgOverlay.style.left  = '0px';
+  gifOverlay.style.left = '0px';
 
   // -------------------------------------------------------------------------
   // Inject a <style> tag that lifts known DDB UI elements above our overlays.
@@ -61,6 +59,10 @@
     const s = document.createElement('style');
     s.id = 'dnd-overlay-lifts';
     s.textContent = [
+      // Left sidebar panel (character sheet, DM tools) — z=4 in DDB, below our overlay
+      '[class*="J127eW__left"]    { z-index: 200 !important; }',
+      // Left map-tool toolbar (adjusts position when sidebar open)
+      '[class*="iB2XjW__toolbar"] { z-index: 200 !important; }',
       // Bottom toolbar: Roll Dice, Hide Scene, zoom, Game Log, Game Info
       '[class*="zsFwWG__wrapper"] { z-index: 200 !important; }',
       // Scene switcher dropdown list (opens below the 64px header into overlay area)
@@ -816,24 +818,13 @@
         </div>
       </div>
       <hr class="dnd-divider" />
-      <div id="dnd-layout-controls">
-        <p class="dnd-section-label">Layout</p>
-        <div class="dnd-music-row">
-          <span class="dnd-opacity-label">Char-Sheet<br>Schutz</span>
-          <input type="range" id="dnd-left-offset-slider" class="dnd-opacity-slider"
-            min="0" max="600" step="10" value="270" />
-          <span class="dnd-opacity-val" id="dnd-left-offset-val">270px</span>
-        </div>
-      </div>
-      <hr class="dnd-divider" />
       <button class="dnd-btn dnd-btn-secondary" id="dnd-logout-btn">Ausloggen</button>
     `;
 
     // --- Feature 1: Restore saved volumes ---
-    chrome.storage.local.get(['dnd-music-vol', 'dnd-weather-vol', 'dnd-left-offset'], (r) => {
+    chrome.storage.local.get(['dnd-music-vol', 'dnd-weather-vol'], (r) => {
       const musicVol   = r['dnd-music-vol']   ?? 0.8;
       const weatherVol = r['dnd-weather-vol'] ?? 0.3;
-      const offset     = r['dnd-left-offset'] ?? 270;
 
       const volSlider = body.querySelector('#dnd-volume-slider');
       if (volSlider) {
@@ -847,20 +838,6 @@
         body.querySelector('#dnd-weather-volume-val').textContent = Math.round(weatherVol * 100) + '%';
         chrome.runtime.sendMessage({ type: 'WEATHER_VOLUME', volume: weatherVol });
       }
-      const offsetSlider = body.querySelector('#dnd-left-offset-slider');
-      if (offsetSlider) {
-        offsetSlider.value = offset;
-        body.querySelector('#dnd-left-offset-val').textContent = offset + 'px';
-      }
-    });
-
-    // Left offset slider
-    const offsetSlider = body.querySelector('#dnd-left-offset-slider');
-    const offsetVal    = body.querySelector('#dnd-left-offset-val');
-    offsetSlider.addEventListener('input', () => {
-      const px = parseInt(offsetSlider.value);
-      offsetVal.textContent = px + 'px';
-      setLeftOffset(px);
     });
 
     // Music volume slider – Feature 1: persist
@@ -1313,24 +1290,13 @@
         </div>
       </div>
       <hr class="dnd-divider" />
-      <div>
-        <p class="dnd-section-label">Layout</p>
-        <div class="dnd-music-row">
-          <span class="dnd-opacity-label">Char-Sheet<br>Schutz</span>
-          <input type="range" id="dnd-player-offset-slider" class="dnd-opacity-slider"
-            min="0" max="600" step="10" value="270" />
-          <span class="dnd-opacity-val" id="dnd-player-offset-val">270px</span>
-        </div>
-      </div>
-      <hr class="dnd-divider" />
       <button class="dnd-btn dnd-btn-secondary" id="dnd-logout-btn">Ausloggen</button>
     `;
 
-    // Feature 1: Restore saved volumes for player
-    chrome.storage.local.get(['dnd-music-vol', 'dnd-weather-vol', 'dnd-left-offset'], (r) => {
+    // Restore saved volumes for player
+    chrome.storage.local.get(['dnd-music-vol', 'dnd-weather-vol'], (r) => {
       const musicVol   = r['dnd-music-vol']   ?? 0.8;
       const weatherVol = r['dnd-weather-vol'] ?? 0.3;
-      const offset     = r['dnd-left-offset'] ?? 270;
 
       const musicSlider = body.querySelector('#dnd-player-music-vol');
       if (musicSlider) {
@@ -1343,11 +1309,6 @@
         weatherSlider.value = weatherVol;
         body.querySelector('#dnd-player-weather-vol-val').textContent = Math.round(weatherVol * 100) + '%';
         chrome.runtime.sendMessage({ type: 'WEATHER_VOLUME', volume: weatherVol });
-      }
-      const offsetSlider = body.querySelector('#dnd-player-offset-slider');
-      if (offsetSlider) {
-        offsetSlider.value = offset;
-        body.querySelector('#dnd-player-offset-val').textContent = offset + 'px';
       }
     });
 
@@ -1372,13 +1333,6 @@
     body.querySelector('#dnd-player-notes-refresh').addEventListener('click', async () => {
       const r = await chrome.runtime.sendMessage({ type: 'NOTES_GET', campaignId: profile.campaign_id });
       if (notesRendered) notesRendered.innerHTML = renderMarkdown(r.content || '');
-    });
-
-    // Restore + wire player offset slider
-    body.querySelector('#dnd-player-offset-slider').addEventListener('input', function () {
-      const px = parseInt(this.value);
-      body.querySelector('#dnd-player-offset-val').textContent = px + 'px';
-      setLeftOffset(px);
     });
 
     body.querySelector('#dnd-player-music-vol').addEventListener('input', function () {
