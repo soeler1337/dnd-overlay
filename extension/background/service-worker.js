@@ -198,6 +198,13 @@ async function handleMessage(msg) {
       return { scene: data };
     }
 
+    // Player calls this on login to start the currently active scene's music
+    case 'SCENE_AUDIO_PLAY': {
+      const { data: scene } = await sb.from('scenes').select('*').eq('id', msg.sceneId).single();
+      if (scene) await playSceneAudio(scene, !!msg.isCombat);
+      return { ok: true };
+    }
+
     case 'DEFAULT_MUSIC_GET': {
       const { data } = await sb
         .from('campaigns')
@@ -258,6 +265,11 @@ async function handleMessage(msg) {
 
     case 'WEATHER_VOLUME':
       await sendAudio({ type: 'SET_WEATHER_VOLUME', volume: msg.volume });
+      return { ok: true };
+
+    case 'WEATHER_PLAY':
+      if (msg.url) await sendAudio({ type: 'PLAY_WEATHER', url: msg.url, volume: msg.volume ?? 0.3 });
+      else         await sendAudio({ type: 'STOP_WEATHER' });
       return { ok: true };
 
     case 'WEATHER_PRESETS_LIST': {

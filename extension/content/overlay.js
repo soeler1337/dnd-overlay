@@ -543,6 +543,17 @@
     } else {
       gifOverlay.classList.remove('active');
     }
+    // Play weather sound locally on player side (DM's WEATHER_SET only plays on DM machine)
+    if (!window._dndIsDm) {
+      chrome.storage.local.get('dnd-weather-vol', (r) => {
+        const vol = r['dnd-weather-vol'] ?? 0.3;
+        if (preset?.sound_url) {
+          chrome.runtime.sendMessage({ type: 'WEATHER_PLAY', url: preset.sound_url, volume: vol }).catch(() => {});
+        } else {
+          chrome.runtime.sendMessage({ type: 'WEATHER_PLAY', url: null, volume: vol }).catch(() => {});
+        }
+      });
+    }
   }
 
 
@@ -1467,7 +1478,16 @@
       const sceneResp = await chrome.runtime.sendMessage({
         type: 'SCENE_GET', sceneId: session.active_scene_id,
       });
-      if (sceneResp.scene) applyScene(sceneResp.scene, session.is_combat ?? false);
+      if (sceneResp.scene) {
+        applyScene(sceneResp.scene, session.is_combat ?? false);
+        // Also start audio – the RT subscription only fires on changes, not on join
+        chrome.runtime.sendMessage({
+          type: 'SCENE_AUDIO_PLAY',
+          sceneId: session.active_scene_id,
+          campaignId: profile.campaign_id,
+          isCombat: session.is_combat ?? false,
+        }).catch(() => {});
+      }
     }
 
     function doRefreshHandouts() {
