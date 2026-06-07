@@ -6,7 +6,8 @@
 
   "permissions": [
     "storage",
-    "offscreen"
+    "offscreen",
+    "tabs"
   ],
 
   "host_permissions": [
