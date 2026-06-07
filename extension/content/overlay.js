@@ -60,9 +60,11 @@
     s.id = 'dnd-overlay-lifts';
     s.textContent = [
       // Left sidebar panel (character sheet, DM tools) — z=4 in DDB, below our overlay
-      '[class*="J127eW__left"]    { z-index: 200 !important; }',
+      '[class*="J127eW__left"]      { z-index: 200 !important; }',
       // Left map-tool toolbar (adjusts position when sidebar open)
-      '[class*="iB2XjW__toolbar"] { z-index: 200 !important; }',
+      '[class*="iB2XjW__toolbar"]   { z-index: 200 !important; }',
+      // Content container next to sidebar (z=2 in DDB)
+      '[class*="-lA1Pq__container"] { z-index: 200 !important; }',
       // Bottom toolbar: Roll Dice, Hide Scene, zoom, Game Log, Game Info
       '[class*="zsFwWG__wrapper"] { z-index: 200 !important; }',
       // Scene switcher dropdown list (opens below the 64px header into overlay area)
@@ -682,7 +684,56 @@
     window._dndIsDm          = isDm;
     window._dndCampaignId    = profile?.campaign_id ?? null;
     isDm ? renderDm(profile) : renderPlayer(profile, session);
-    if (profile?.campaign_id) startDiceObserver(profile.campaign_id);
+    if (profile?.campaign_id) {
+      startDiceObserver(profile.campaign_id);
+      if (isDm) startScenarioNameObserver(profile.campaign_id);
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // DDB scenario-name observer – when the DM switches a scene in DDB's native
+  // UI, the scenarioName element text changes.  We detect this and auto-switch
+  // our overlay scene to the matching entry in window._dndScenes (name match,
+  // case-insensitive).  Only fires after the initial load to avoid spurious
+  // switches on page ready.
+  // -------------------------------------------------------------------------
+  function startScenarioNameObserver(campaignId) {
+    let debounce  = null;
+    let lastText  = '';
+    let ready     = false;
+
+    function onNameChange() {
+      const el = document.querySelector('[class*="scenarioName"]');
+      if (!el) return;
+      const name = el.textContent.trim();
+      if (!name || name === lastText) return;
+      lastText = name;
+      if (!ready) return; // skip the initial value set on load
+
+      const scenes = window._dndScenes || [];
+      const match  = scenes.find(s => s.name.trim().toLowerCase() === name.toLowerCase());
+      if (!match) return;
+
+      // Skip if already the active scene in our panel
+      const activeRow = document.querySelector('.dnd-scene-row.active');
+      if (activeRow?.dataset.sceneId === match.id) return;
+
+      chrome.runtime.sendMessage({ type: 'SCENE_SWITCH', sceneId: match.id, campaignId })
+        .catch(() => {});
+    }
+
+    // Capture the current name so first load doesn't trigger a switch
+    const initEl = document.querySelector('[class*="scenarioName"]');
+    if (initEl) lastText = initEl.textContent.trim();
+    setTimeout(() => { ready = true; }, 1500);
+
+    // Watch the whole scene bar container for DOM mutations
+    const container = document.querySelector('[class*="scenarioMenuEncounters"]')
+                   || document.body;
+    new MutationObserver(() => {
+      clearTimeout(debounce);
+      debounce = setTimeout(onNameChange, 400);
+    }).observe(container, { childList: true, subtree: true, characterData: true });
   }
 
   // -------------------------------------------------------------------------
