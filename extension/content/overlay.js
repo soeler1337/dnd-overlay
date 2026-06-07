@@ -1405,7 +1405,7 @@
   }
 
   // -- Player view -----------------------------------------------------------
-  async function renderPlayer(profile, session) {
+  async function renderPlayer(profile, _sessionUnused) {
     body.innerHTML = `
       <div class="dnd-welcome">
         <strong>${esc(profile.display_name || profile.username)}</strong>
