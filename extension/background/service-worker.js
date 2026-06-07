@@ -334,6 +334,14 @@ async function handleMessage(msg) {
         .update({ is_combat: msg.active, updated_at: new Date().toISOString() })
         .eq('campaign_id', msg.campaignId);
       if (error) throw error;
+      // Direct broadcast so players get the combat-state audio change immediately
+      if (msg.sceneId) {
+        const { data: scene } = await sb.from('scenes').select('*').eq('id', msg.sceneId).single();
+        if (scene) {
+          broadcastToTabs({ type: 'SCENE_CHANGED', scene, isCombat: !!msg.active });
+          playSceneAudio(scene, !!msg.active);
+        }
+      }
       return { ok: true };
     }
 

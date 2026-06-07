@@ -1142,6 +1142,7 @@
       updateInitiativeBtn(initBtn, isCombatActive);
       await chrome.runtime.sendMessage({
         type: 'INITIATIVE_TOGGLE', active: isCombatActive, campaignId: profile.campaign_id,
+        sceneId: _activeDmScene?.id ?? null,
       });
       // Apply locally using tracked active scene
       if (_activeDmScene) {
