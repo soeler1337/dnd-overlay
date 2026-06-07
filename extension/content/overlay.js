@@ -1459,11 +1459,25 @@
       }
     });
 
-    // Load shared handouts + notes for player
-    const [handoutsResp, notesResp] = await Promise.all([
-      chrome.runtime.sendMessage({ type: 'HANDOUTS_LIST', campaignId: profile.campaign_id }),
-      chrome.runtime.sendMessage({ type: 'NOTES_GET', campaignId: profile.campaign_id }),
+    // Load everything the player needs on startup
+    const [handoutsResp, notesResp, sessionResp, defaultResp] = await Promise.all([
+      chrome.runtime.sendMessage({ type: 'HANDOUTS_LIST',   campaignId: profile.campaign_id }),
+      chrome.runtime.sendMessage({ type: 'NOTES_GET',       campaignId: profile.campaign_id }),
+      chrome.runtime.sendMessage({ type: 'SESSION_GET',     campaignId: profile.campaign_id }),
+      chrome.runtime.sendMessage({ type: 'DEFAULT_MUSIC_GET', campaignId: profile.campaign_id }),
     ]);
+
+    // Cache default background so applyScene fallback works for players too
+    window._dndDefaultBackground = defaultResp.backgroundUrl || null;
+
+    // Apply the currently active scene immediately (don't wait for DM to switch)
+    const session = sessionResp.session;
+    if (session?.active_scene_id) {
+      const sceneResp = await chrome.runtime.sendMessage({
+        type: 'SCENE_GET', sceneId: session.active_scene_id,
+      });
+      if (sceneResp.scene) applyScene(sceneResp.scene, session.is_combat ?? false);
+    }
 
     function doRefreshHandouts() {
       chrome.runtime.sendMessage({ type: 'HANDOUTS_LIST', campaignId: profile.campaign_id }).then(r => {

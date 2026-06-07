@@ -186,6 +186,16 @@ async function handleMessage(msg) {
       return { scenes: data };
     }
 
+    case 'SCENE_GET': {
+      const { data, error } = await sb
+        .from('scenes')
+        .select('*')
+        .eq('id', msg.sceneId)
+        .single();
+      if (error) throw error;
+      return { scene: data };
+    }
+
     case 'DEFAULT_MUSIC_GET': {
       const { data } = await sb
         .from('campaigns')
