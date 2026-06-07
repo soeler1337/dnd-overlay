@@ -735,19 +735,26 @@
         console.log('[DnD] No scene match for:', name,
           '| fallback:', fallback?.name ?? 'none',
           '| _dndDefaultBackground:', window._dndDefaultBackground ?? 'null');
+        const vol = parseFloat(document.getElementById('dnd-volume-slider')?.value ?? 0.8);
         if (fallback) {
           if (_activeDmScene?.id !== fallback.id) {
-            // Force bg_opacity on so the default background is always visible
             if (!fallback.bg_opacity && window._dndDefaultBackground) fallback.bg_opacity = 1;
             applyScene(fallback, combatActive);
+            // Play audio for the Default scene (same as a normal scene switch)
+            const audioUrl = resolveAudioUrl(fallback, combatActive);
+            if (audioUrl) chrome.runtime.sendMessage({ type: 'AUDIO_PLAY', url: audioUrl, volume: vol }).catch(() => {});
+            else          chrome.runtime.sendMessage({ type: 'AUDIO_STOP' }).catch(() => {});
             chrome.runtime.sendMessage({ type: 'SCENE_SWITCH', sceneId: fallback.id, campaignId }).catch(() => {});
           }
         } else {
-          // No Default scene → use raw default background URL if available, else hide
+          // No Default scene → show default background, play default ambient or stop
           _activeDmScene = null;
           const defBg = window._dndDefaultBackground || null;
-          console.log('[DnD] Showing defBg:', defBg);
           setBackground(defBg, defBg ? 1 : 0);
+          // Audio: play default ambient if available, otherwise stop
+          const defAmbient = window._dndDefaultAmbient || null;
+          if (defAmbient) chrome.runtime.sendMessage({ type: 'AUDIO_PLAY', url: defAmbient, volume: vol }).catch(() => {});
+          else            chrome.runtime.sendMessage({ type: 'AUDIO_STOP' }).catch(() => {});
           const nameEl = document.getElementById('dnd-active-scene-name');
           if (nameEl) nameEl.textContent = name + ' –';
           const bgToggle = document.getElementById('dnd-bg-toggle');
@@ -1533,6 +1540,10 @@
     makeSectionCollapsible('dnd-player-notes-container',  'dnd-col-p-notes');
     makeSectionCollapsible('dnd-player-volume-container', 'dnd-col-p-volume');
   }
+
+  // Keep the service worker alive so the Supabase Realtime subscription
+  // doesn't get lost when Chrome suspends the MV3 SW after ~30 s of inactivity.
+  setInterval(() => chrome.runtime.sendMessage({ type: 'PING' }).catch(() => {}), 20000);
 
   function esc(str) {
     if (!str) return '';

@@ -136,6 +136,8 @@ async function handleMessage(msg) {
   switch (msg.type) {
 
     case 'PING':
+      // MV3 SWs can be suspended; re-subscribe if Realtime channel was lost
+      if (!realtimeChannel) await tryResubscribe();
       return { status: 'ok' };
 
     // -- Auth ----------------------------------------------------------------
@@ -457,6 +459,23 @@ async function fetchProfile(userId) {
 async function fetchSession(campaignId) {
   const { data } = await sb.from('sessions').select('*').eq('campaign_id', campaignId).single();
   return data;
+}
+
+// Re-establish Realtime subscription after SW was suspended by Chrome (MV3)
+async function tryResubscribe() {
+  try {
+    const { data } = await sb.auth.getSession();
+    if (!data?.session) return;
+    const profile = await fetchProfile(data.session.user.id);
+    if (!profile?.campaign_id) return;
+    const session = await fetchSession(profile.campaign_id);
+    if (session) {
+      console.log('[SW] Re-subscribing after SW wake-up');
+      subscribeToSession(session.id, profile.campaign_id);
+    }
+  } catch (e) {
+    console.warn('[SW] tryResubscribe failed:', e.message);
+  }
 }
 
 chrome.runtime.onInstalled.addListener(() => {
