@@ -11,13 +11,13 @@ Realtime-Sync ueber Supabase: DM schaltet Szenen, Musik und Initiative – alle 
 |---|---|---|
 | Hintergrundbild je Szene | schalten | sehen |
 | Umgebungsmusik / Kampfmusik | steuern | hoeren |
-| Wetter-GIF + Wettergeraeusche | schalten | sehen/hoeren |
-| Initiative starten / beenden | | |
+| Wetter-GIF + Wettergeraeusche | schalten | sehen / hoeren |
+| Initiative starten / beenden | ✓ | – |
 | Handouts anzeigen (Zoom, Pan) | oeffnen & streamen | oeffnen |
 | Soundboard (Einzel-SFX) | abspielen | hoeren |
 | Kampagnen-Notizen (Markdown) | schreiben | lesen |
-| Lautstaerke & Layout-Offset | | je selbst |
-| Stream-Overlay (OBS) | hintergrund + handout + wetter + wuerfellog | – |
+| Lautstaerke & Layout-Offset | je selbst | je selbst |
+| Stream-Overlay (OBS) | Hintergrund + Handout + Wetter + Wuerfellog | – |
 
 ---
 
@@ -29,7 +29,7 @@ Realtime-Sync ueber Supabase: DM schaltet Szenen, Musik und Initiative – alle 
 2. **Entwicklermodus** einschalten (oben rechts)
 3. **Entpackte Erweiterung laden** → Ordner `extension/` auswaehlen
 4. Keine Fehlermeldung = Erfolg
-5. `https://www.dndbeyond.com/games/5570639` oeffnen
+5. `https://www.dndbeyond.com/games/[deine-game-id]` oeffnen
 6. Unten rechts erscheint ein roter **DnD**-Button
 
 ### 2. Accounts anlegen
@@ -38,14 +38,14 @@ Erstelle `extension/accounts.json` (wird nicht ins Git committed):
 
 ```json
 [
-  { "label": "Soeler (DM)", "username": "soeler", "password": "dein-passwort" },
-  { "label": "Spieler 1",   "username": "spieler1", "password": "passwort" }
+  { "label": "DM",       "username": "dm_name",      "password": "passwort" },
+  { "label": "Spieler1", "username": "spieler_name", "password": "passwort" }
 ]
 ```
 
-`username` muss exakt dem Supabase-Profil entsprechen (ohne `@dnd-overlay.local`).
+`username` muss exakt dem Supabase-Profil entsprechen.
 
-### 3. Extension nach Code-Aenderungen aktualisieren
+### 3. Nach Code-Aenderungen
 
 1. `chrome://extensions` → Reload-Symbol der Extension klicken
 2. DDB-Tab neu laden (`F5`)
@@ -57,7 +57,7 @@ Erstelle `extension/accounts.json` (wird nicht ins Git committed):
 Als Browser-Quelle in OBS hinzufuegen:
 
 ```
-URL:    https://soeler1337.github.io/dnd-overlay/stream-overlay.html?game=5570639
+URL:    https://[dein-github-user].github.io/dnd-overlay/stream-overlay.html?game=[game-id]
 Breite: 1920
 Hoehe:  1080
 Hintergrund: transparent (Haken setzen)
@@ -67,7 +67,7 @@ Das Overlay zeigt automatisch:
 - Hintergrundbild der aktiven Szene
 - Wetter-GIF
 - Gespiegelte Handouts (wenn DM eins oeffnet)
-- Wuerfellog (letzte 5 Wuerfe, 18 Sek. sichtbar)
+- Wuerfellog (letzte 5 Wuerfe, 18 Sek. sichtbar, Nat-20-Hervorhebung)
 
 ---
 
@@ -79,14 +79,14 @@ Der Watcher beobachtet den `content/`-Ordner und laedt neue Dateien automatisch 
 content/
   scenes/
     Szene A/
-      ambient.mp3      # Umgebungsmusik
-      combat.mp3       # Kampfmusik
-      background.jpg   # Hintergrundbild
+      ambient.mp3       # Umgebungsmusik
+      combat.mp3        # Kampfmusik
+      background.jpg    # Hintergrundbild
   default/
-    ambient.mp3        # Standard-Ambient (falls Szene kein eigenes hat)
-    combat.mp3         # Standard-Kampf
+    ambient.mp3         # Standard-Ambient (Fallback)
+    combat.mp3          # Standard-Kampfmusik (Fallback)
   sounds/
-    Feuerball.mp3      # Soundboard-SFX
+    Feuerball.mp3       # Soundboard-SFX
   handouts/
     Karte.png
   weather/
@@ -98,7 +98,7 @@ Watcher starten:
 
 ```bash
 cd watcher
-cp .env.example .env   # Supabase URL + Service Key eintragen
+cp .env.example .env    # Supabase URL + Service Key eintragen
 npm install
 node watcher.js
 ```
@@ -113,10 +113,14 @@ Migrationen liegen in `supabase/migrations/`. Im Supabase SQL-Editor ausfuehren.
 
 ---
 
-## Layout-Hinweis
+## Layout
 
-Die Overlays (Hintergrundbild + Wetter) starten bei:
-- **Links:** `270px` (Standard, schuetzt die DnD-Beyond-Seitenleiste) – per Slider im Panel anpassbar
-- **Oben:** `64px` (DDB-Kopfzeile mit Szenen-Dropdown, Wuerfel-Datenschutz usw. bleibt immer frei)
+Das Hintergrund-Overlay deckt nur den Spielbereich ab:
 
-Die DDB-Kopfzeile und die linke Tool-Leiste sind immer erreichbar und werden vom Overlay nicht verdeckt.
+| Rand | Wert | Grund |
+|---|---|---|
+| Oben | 64 px | DDB-Kopfzeile (Szenen-Auswahl, Wuerfel-Optionen) |
+| Links | 270 px (Slider) | DDB-Seitenleiste / Charakter-Sheet |
+| Unten / Rechts | 0 | DDB-Toolbar schwimmt per z-index ueber dem Overlay |
+
+Die DDB-Toolbar-Leisten (oben, unten) werden automatisch per z-index ueber das Overlay gehoben und sind immer erreichbar.

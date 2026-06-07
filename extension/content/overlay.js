@@ -53,6 +53,23 @@
   });
 
   // -------------------------------------------------------------------------
+  // Inject a <style> tag that lifts known DDB UI elements above our overlays.
+  // CSS rules apply immediately and survive React re-renders — no timing issues.
+  // Class fragments confirmed via DevTools inspection on dndbeyond.com/games/*.
+  // -------------------------------------------------------------------------
+  (function injectDdbLifts() {
+    const s = document.createElement('style');
+    s.id = 'dnd-overlay-lifts';
+    s.textContent = [
+      // Bottom toolbar: Roll Dice, Hide Scene, zoom, Game Log, Game Info
+      '[class*="zsFwWG__wrapper"] { z-index: 200 !important; }',
+      // Scene switcher dropdown list (opens below the 64px header into overlay area)
+      '[class*="zzLIoG__dropdownContent"] { z-index: 200 !important; }',
+    ].join('\n');
+    document.head.appendChild(s);
+  })();
+
+  // -------------------------------------------------------------------------
   // Lift DDB UI elements above our bg overlays (z-index 50/51).
   //
   // CSS z-index on child elements alone doesn't work because DDB wraps them
