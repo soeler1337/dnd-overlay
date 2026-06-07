@@ -119,13 +119,14 @@
   // DDB scene-switcher bar (top) – z-index lift works for this element
   liftAboveBg('scenarioMenuEncounters');
 
-  // DDB toolbar panels – punch transparent holes in our own overlays so
-  // these areas are always accessible.  Class names confirmed via DevTools:
+  // DDB toolbar panels – shrink our overlays' right edge so they stop just
+  // before the toolbar column.  This avoids clip-path artefacts and means
+  // the toolbar is fully visible and clickable without any z-index tricks.
+  // Class names confirmed via DevTools console inspection:
   //   styles-module__J127eW__topRight     (top-right controls)
   //   styles-module__J127eW__right        (right-side controls)
   //   styles-module__J127eW__bottomRight  (dice roller, bottom-right)
-  // All three are clipped in one pass so the polygons don't overwrite each other.
-  clipOverlayAroundAll(['__topRight', '__right', '__bottomRight']);
+  fitOverlayToContent(['__topRight', '__right', '__bottomRight']);
 
   function setBackground(url, opacity) {
     if (url) {
@@ -525,17 +526,16 @@
   }
 
   // -------------------------------------------------------------------------
-  // Punch transparent holes in our overlays for a set of DDB UI elements.
-  // Each fragment is matched via [class*="fragment"].  All matched elements'
-  // bounding boxes are unioned into a single right-column notch so that
-  // only ONE clip-path is written (multiple passes would overwrite each other).
-  // RAF-debounced to avoid thrashing during React re-renders.
+  // Shrink our overlays' right edge so they stop before the DDB toolbar column.
+  // No clip-path, no z-index tricks – the toolbar sits completely outside our
+  // overlay divs and is therefore always fully visible and clickable.
+  // RAF-debounced to avoid layout thrashing during React re-renders.
   // -------------------------------------------------------------------------
-  function clipOverlayAroundAll(classFragments) {
-    const PAD  = 6;
-    let rafId  = null;
+  function fitOverlayToContent(classFragments) {
+    const PAD  = 8; // px gap between overlay right edge and toolbar left edge
+    let   rafId = null;
 
-    function computeClip() {
+    function update() {
       const rects = classFragments
         .map(f => document.querySelector(`[class*="${f}"]`))
         .filter(Boolean)
@@ -544,42 +544,25 @@
 
       if (!rects.length) return;
 
-      const offL = parseInt(bgOverlay.style.left || '270');
-      const W    = window.innerWidth  - offL;
-      const H    = window.innerHeight;
+      // Leftmost edge of any toolbar element = where our overlay must end
+      const toolbarLeft  = Math.min(...rects.map(r => r.left));
+      const rightMargin  = Math.max(0, window.innerWidth - toolbarLeft + PAD);
 
-      // Union of all toolbar bounding boxes → single notch coordinates
-      const combinedLeft = Math.min(...rects.map(r => r.left));
-      const combinedTop  = Math.min(...rects.map(r => r.top));
-
-      const nx = Math.max(0, combinedLeft - offL - PAD);
-      const ny = Math.max(0, combinedTop        - PAD);
-
-      // Polygon = full overlay MINUS a right-side column from y=ny downward.
-      // Clockwise: top-left → top-right → notch top → notch left-edge →
-      //            bottom-left-of-notch → bottom-left-of-overlay
-      const poly = [
-        `0px 0px`,
-        `${W}px 0px`,
-        `${W}px ${ny}px`,
-        `${nx}px ${ny}px`,
-        `${nx}px ${H}px`,
-        `0px ${H}px`,
-      ].join(', ');
-
-      const val = `polygon(${poly})`;
-      bgOverlay.style.clipPath  = val;
-      gifOverlay.style.clipPath = val;
+      bgOverlay.style.right  = rightMargin + 'px';
+      gifOverlay.style.right = rightMargin + 'px';
+      // Clear any leftover clip-path from previous attempts
+      bgOverlay.style.clipPath  = '';
+      gifOverlay.style.clipPath = '';
     }
 
-    function scheduleClip() {
+    function schedule() {
       if (rafId) return;
-      rafId = requestAnimationFrame(() => { rafId = null; computeClip(); });
+      rafId = requestAnimationFrame(() => { rafId = null; update(); });
     }
 
-    new MutationObserver(scheduleClip).observe(document.body, { childList: true, subtree: true });
-    window.addEventListener('resize', scheduleClip);
-    computeClip();
+    new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true });
+    window.addEventListener('resize', schedule);
+    update();
   }
 
   // -------------------------------------------------------------------------
