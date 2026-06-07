@@ -116,12 +116,10 @@
     tryLift();
   }
 
-  // DDB scene-switcher bar (top) – lift above overlay
+  // DDB scene-switcher bar (top) – lift above overlay.
+  // Top/bottom edges of the overlay are set in CSS (top:64px / bottom:80px)
+  // so the header bar and bottom toolbar are always fully uncovered.
   liftAboveBg('scenarioMenuEncounters');
-
-  // DDB bottom toolbar (Roll Dice / Hide Scene / Game Log / Game Info)
-  // class confirmed: styles-module__zsFwWG__wrapper  pos=fixed  t≈978
-  liftAboveBg('zsFwWG__wrapper');
 
   // The DDB game header (top bar, h=64px) is left uncovered because the
   // overlays start at top:64px (set in CSS). No JS workaround needed for
