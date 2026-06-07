@@ -4,19 +4,20 @@
    Design tokens
    ========================================================= */
 :root {
-  --dnd-bg0:        #0e0b06;   /* deepest background */
-  --dnd-bg1:        #16120a;   /* panel background   */
-  --dnd-bg2:        #1e1810;   /* raised surfaces    */
-  --dnd-bg3:        #28200e;   /* hover / active     */
-  --dnd-gold:       #c8a45a;   /* primary accent     */
-  --dnd-gold-dim:   #7a6030;   /* muted accent       */
-  --dnd-gold-glow:  #c8a45a30; /* subtle glow        */
-  --dnd-text:       #ddd0b4;   /* body text          */
-  --dnd-text-dim:   #7a6a50;   /* placeholder / hint */
-  --dnd-border:     #32240e;   /* default border     */
-  --dnd-border-hi:  #c8a45a;   /* highlighted border */
-  --dnd-red:        #c0402a;
-  --dnd-green:      #4a9630;
+  /* DDB-matched colour palette (dark blue-grey + teal accent) */
+  --dnd-bg0:        #111619;   /* deepest background  – darker than DDB body */
+  --dnd-bg1:        #1a2226;   /* panel background    – close to DDB sidebar */
+  --dnd-bg2:        #212c32;   /* raised surfaces     */
+  --dnd-bg3:        #293640;   /* hover / active      – DDB body #293136     */
+  --dnd-gold:       #00c49a;   /* primary accent      – DDB teal #00daa6     */
+  --dnd-gold-dim:   #007a60;   /* muted accent        */
+  --dnd-gold-glow:  #00c49a28; /* subtle glow         */
+  --dnd-text:       #cdd8e0;   /* body text           – cool near-white      */
+  --dnd-text-dim:   #4e6470;   /* placeholder / hint  */
+  --dnd-border:     #243038;   /* default border      */
+  --dnd-border-hi:  #00c49a;   /* highlighted border  */
+  --dnd-red:        #d94f3a;
+  --dnd-green:      #2aaa70;
   --dnd-radius:     6px;
   --dnd-radius-sm:  4px;
   --dnd-transition: 0.15s ease;
@@ -80,7 +81,7 @@
 #dnd-overlay-toggle {
   all: unset;
   cursor: pointer;
-  background: #6a2000;
+  background: #0a1e28;
   color: var(--dnd-gold);
   border: 2px solid var(--dnd-gold);
   border-radius: 50%;
@@ -97,7 +98,7 @@
 }
 
 #dnd-overlay-toggle:hover {
-  background: #8a2800;
+  background: #0e2a38;
   box-shadow: 0 2px 20px rgba(0,0,0,0.8), 0 0 12px var(--dnd-gold-glow);
 }
 
@@ -128,9 +129,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: linear-gradient(180deg, #271c08 0%, #1e1508 100%);
+  background: linear-gradient(180deg, #0e1820 0%, #111c26 100%);
   padding: 11px 14px 10px;
-  border-bottom: 1px solid #c8a45a28;
+  border-bottom: 1px solid #00c49a22;
   flex-shrink: 0;
 }
 
@@ -215,7 +216,7 @@
    ========================================================= */
 .dnd-divider {
   border: none;
-  border-top: 1px solid #c8a45a18;
+  border-top: 1px solid #00c49a18;
   margin: 12px 0;
 }
 
@@ -246,9 +247,9 @@
 }
 
 .dnd-role-badge.dm {
-  background: #3a1400;
+  background: #0a2030;
   color: var(--dnd-gold);
-  border: 1px solid #c8a45a44;
+  border: 1px solid #00c49a44;
 }
 
 .dnd-role-badge.player {
@@ -357,13 +358,13 @@
 }
 
 .dnd-btn-primary {
-  background: #6a2000;
+  background: #083028;
   color: var(--dnd-gold);
   border: 1px solid var(--dnd-gold-dim);
 }
 
 .dnd-btn-primary:hover:not(:disabled) {
-  background: #8a2800;
+  background: #0a3c30;
   border-color: var(--dnd-gold);
 }
 
@@ -446,9 +447,9 @@
   box-sizing: border-box;
   padding: 9px 12px;
   border-radius: var(--dnd-radius-sm);
-  background: #0a1e08;
-  border: 1px solid #2a5020;
-  color: #5aaa40;
+  background: #082018;
+  border: 1px solid #00c49a44;
+  color: #00c49a;
   font-size: 13px;
   font-weight: 600;
   text-align: center;
@@ -457,14 +458,14 @@
 }
 
 .dnd-initiative-btn:hover {
-  background: #122810;
-  border-color: #4a9030;
+  background: #0a2820;
+  border-color: var(--dnd-gold);
 }
 
 .dnd-initiative-btn.combat-active {
-  background: #280a08;
-  border-color: #a03020;
-  color: #d06050;
+  background: #2a0808;
+  border-color: #c03838;
+  color: #e06060;
 }
 
 .dnd-initiative-btn.combat-active:hover {
@@ -557,15 +558,15 @@
 }
 
 .dnd-scene-toggle.on {
-  background: #162e0a;
-  border-color: #4a9030;
-  color: #6ab850;
+  background: #082818;
+  border-color: #00c49a66;
+  color: #00c49a;
 }
 
 .dnd-scene-toggle.off {
-  background: #220808;
-  border-color: #5a1e1e;
-  color: #8a4040;
+  background: #200c0c;
+  border-color: #602020;
+  color: #a05050;
 }
 
 /* Weather dropdown */
@@ -676,11 +677,11 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  background: linear-gradient(180deg, #271c08 0%, #1e1508 100%);
+  background: linear-gradient(180deg, #0e1820 0%, #111c26 100%);
   padding: 7px 10px;
   cursor: grab;
   user-select: none;
-  border-bottom: 1px solid #c8a45a28;
+  border-bottom: 1px solid #00c49a28;
   flex-shrink: 0;
 }
 
@@ -748,7 +749,7 @@
   gap: 6px;
   padding: 5px 10px;
   background: var(--dnd-bg0);
-  border-top: 1px solid #c8a45a18;
+  border-top: 1px solid #00c49a18;
   flex-shrink: 0;
 }
 
@@ -886,9 +887,9 @@
 .dnd-notes-rendered p  { margin: 4px 0; }
 .dnd-notes-rendered ul { margin: 4px 0; padding-left: 18px; }
 .dnd-notes-rendered li { margin: 2px 0; }
-.dnd-notes-rendered hr { border: none; border-top: 1px solid #c8a45a28; margin: 10px 0; }
+.dnd-notes-rendered hr { border: none; border-top: 1px solid #00c49a28; margin: 10px 0; }
 .dnd-notes-rendered strong { color: var(--dnd-gold); font-weight: 700; }
-.dnd-notes-rendered em { color: #a09070; font-style: italic; }
+.dnd-notes-rendered em { color: #7a9aaa; font-style: italic; }
 .dnd-notes-rendered code { background: var(--dnd-bg0); padding: 1px 5px; border-radius: 3px; font-size: 11px; }
 
 
