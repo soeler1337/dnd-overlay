@@ -73,6 +73,7 @@ function subscribeToSession(sessionId, campaignId) {
       table:  'sessions',
       filter: 'id=eq.' + sessionId,
     }, async (payload) => {
+      console.log('[SW] RT sessions UPDATE received, active_scene_id:', payload.new?.active_scene_id);
       const wasActive    = activeSceneId;
       activeSceneId      = payload.new.active_scene_id;
       const isCombat     = payload.new.is_combat;
@@ -239,11 +240,16 @@ async function handleMessage(msg) {
     }
 
     case 'SCENE_SWITCH': {
+      console.log('[SW] SCENE_SWITCH sceneId:', msg.sceneId, 'campaignId:', msg.campaignId);
       const { error } = await sb
         .from('sessions')
         .update({ active_scene_id: msg.sceneId, updated_at: new Date().toISOString() })
         .eq('campaign_id', msg.campaignId);
-      if (error) throw error;
+      if (error) {
+        console.error('[SW] SCENE_SWITCH DB error:', error.message);
+        throw error;
+      }
+      console.log('[SW] SCENE_SWITCH DB update OK – waiting for Realtime...');
       return { ok: true };
     }
 
