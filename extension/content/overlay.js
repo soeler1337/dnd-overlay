@@ -726,13 +726,17 @@
           applyScene(fallback, combatActive);
           chrome.runtime.sendMessage({ type: 'SCENE_SWITCH', sceneId: fallback.id, campaignId }).catch(() => {});
         } else if (!fallback) {
-          // No default scene → just hide the background overlay
+          // No default scene → use default background URL if available, else hide
           _activeDmScene = null;
-          setBackground(null, 0);
+          const defBg = window._dndDefaultBackground || null;
+          setBackground(defBg, defBg ? 1 : 0);
           const nameEl = document.getElementById('dnd-active-scene-name');
           if (nameEl) nameEl.textContent = name + ' –';
           const bgToggle = document.getElementById('dnd-bg-toggle');
-          if (bgToggle) { bgToggle.textContent = 'AUS'; bgToggle.className = 'dnd-scene-toggle off'; }
+          if (bgToggle) {
+            bgToggle.textContent = defBg ? 'AN' : 'AUS';
+            bgToggle.className = 'dnd-scene-toggle ' + (defBg ? 'on' : 'off');
+          }
         }
         return;
       }
