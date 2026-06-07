@@ -754,6 +754,12 @@
       // Apply locally immediately (no RT roundtrip delay)
       applyScene(match, combatActive);
 
+      // Also trigger audio – the RT subscription only plays on player tabs, not DM tab
+      const vol = parseFloat(document.getElementById('dnd-volume-slider')?.value ?? 0.8);
+      const audioUrl = resolveAudioUrl(match, combatActive);
+      if (audioUrl) chrome.runtime.sendMessage({ type: 'AUDIO_PLAY', url: audioUrl, volume: vol }).catch(() => {});
+      else          chrome.runtime.sendMessage({ type: 'AUDIO_STOP' }).catch(() => {});
+
       chrome.runtime.sendMessage({ type: 'SCENE_SWITCH', sceneId: match.id, campaignId })
         .catch(() => {});
     }

@@ -21,15 +21,17 @@ let realtimeChannel = null;
 // -------------------------------------------------------------------------
 // Offscreen Document helpers (audio)
 // -------------------------------------------------------------------------
+let _offscreenCreating = null;
 async function ensureOffscreen() {
+  if (_offscreenCreating) return _offscreenCreating;
   const existing = await chrome.offscreen.hasDocument();
-  if (!existing) {
-    await chrome.offscreen.createDocument({
-      url:    chrome.runtime.getURL('offscreen/offscreen.html'),
-      reasons: ['AUDIO_PLAYBACK'],
-      justification: 'Background music playback for DnD sessions',
-    });
-  }
+  if (existing) return;
+  _offscreenCreating = chrome.offscreen.createDocument({
+    url:     chrome.runtime.getURL('offscreen/offscreen.html'),
+    reasons: ['AUDIO_PLAYBACK'],
+    justification: 'Background music playback for DnD sessions',
+  }).catch(() => {}).finally(() => { _offscreenCreating = null; });
+  return _offscreenCreating;
 }
 
 async function sendAudio(msg) {
