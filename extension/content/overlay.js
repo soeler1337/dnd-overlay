@@ -116,8 +116,12 @@
     tryLift();
   }
 
-  // DDB scene-switcher bar (top) – z-index lift works for this element
+  // DDB scene-switcher bar (top) – lift above overlay
   liftAboveBg('scenarioMenuEncounters');
+
+  // DDB bottom toolbar (Roll Dice / Hide Scene / Game Log / Game Info)
+  // class confirmed: styles-module__zsFwWG__wrapper  pos=fixed  t≈978
+  liftAboveBg('zsFwWG__wrapper');
 
   // The DDB game header (top bar, h=64px) is left uncovered because the
   // overlays start at top:64px (set in CSS). No JS workaround needed for
