@@ -118,8 +118,10 @@ function subscribeToSession(sessionId, campaignId) {
     .subscribe((status, err) => {
       if (err) console.error('[SW] Realtime error:', err.message ?? err);
       console.log('[SW] Realtime status:', status);
-      // If channel closes or errors, reset so PING triggers a re-subscribe
-      if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+      // Do NOT reset realtimeChannel here – Supabase handles its own reconnect.
+      // Only reset if the channel is permanently dead (error, not transient close).
+      if (status === 'CHANNEL_ERROR') {
+        sb.removeChannel(realtimeChannel).catch(() => {});
         realtimeChannel = null;
       }
     });
@@ -472,6 +474,9 @@ async function fetchSession(campaignId) {
 // Re-establish Realtime subscription after SW was suspended by Chrome (MV3)
 async function tryResubscribe() {
   try {
+    // Clean up ALL stale channels first so we don't create duplicates
+    await sb.removeAllChannels().catch(() => {});
+    realtimeChannel = null;
     const { data } = await sb.auth.getSession();
     if (!data?.session) return;
     const profile = await fetchProfile(data.session.user.id);
