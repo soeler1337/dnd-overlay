@@ -892,6 +892,20 @@
 .dnd-notes-rendered code { background: var(--dnd-bg0); padding: 1px 5px; border-radius: 3px; font-size: 11px; }
 
 
-/* DDB UI elements (scene bar, dice toolbar) are lifted above our bg overlays
-   via JavaScript in overlay.js (liftAboveBg) because CSS z-index alone fails
-   when DDB's own ancestor elements create stacking contexts with z-index < 50. */
+/* DDB scene-switcher bar is lifted via liftAboveBg() in overlay.js.
+   DDB toolbar panels are marked with a dashed overlay so the DM can find
+   the click-through area (overlays have pointer-events:none, so clicking
+   through them always works – the marker just makes the area visible). */
+
+#dnd-toolbar-marker {
+  position: fixed;
+  z-index: 52;            /* above gif-overlay (51) */
+  pointer-events: none;   /* never blocks clicks */
+  display: none;
+  border: 1px dashed rgba(200, 164, 90, 0.55);
+  border-radius: 8px;
+  /* very slight lightening so buttons beneath are a bit more legible */
+  background: rgba(255, 255, 255, 0.04);
+  /* tiny ⚙ label in the top-left corner of the marker box */
+  box-shadow: inset 0 0 0 1px rgba(200, 164, 90, 0.12);
+}

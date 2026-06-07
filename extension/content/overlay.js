@@ -119,14 +119,20 @@
   // DDB scene-switcher bar (top) – z-index lift works for this element
   liftAboveBg('scenarioMenuEncounters');
 
-  // DDB toolbar panels – shrink our overlays' right edge so they stop just
-  // before the toolbar column.  This avoids clip-path artefacts and means
-  // the toolbar is fully visible and clickable without any z-index tricks.
-  // Class names confirmed via DevTools console inspection:
+  // Reset any inline right-margin left over from previous approach
+  bgOverlay.style.right  = '';
+  gifOverlay.style.right = '';
+  bgOverlay.style.clipPath  = '';
+  gifOverlay.style.clipPath = '';
+
+  // DDB toolbar panels are covered by our overlay but still clickable
+  // (pointer-events: none on the overlays). We show a subtle dashed-border
+  // marker so the DM can see exactly where to click through the overlay.
+  // Class names confirmed via DevTools:
   //   styles-module__J127eW__topRight     (top-right controls)
   //   styles-module__J127eW__right        (right-side controls)
   //   styles-module__J127eW__bottomRight  (dice roller, bottom-right)
-  fitOverlayToContent(['__topRight', '__right', '__bottomRight']);
+  markToolbarArea(['__topRight', '__right', '__bottomRight']);
 
   function setBackground(url, opacity) {
     if (url) {
@@ -526,33 +532,40 @@
   }
 
   // -------------------------------------------------------------------------
-  // Shrink our overlays' right edge so they stop before the DDB toolbar column.
-  // No clip-path, no z-index tricks – the toolbar sits completely outside our
-  // overlay divs and is therefore always fully visible and clickable.
+  // Show a subtle dashed-border marker over the DDB toolbar area so the DM
+  // knows where to click through the (pointer-events:none) overlay.
+  // The marker itself is also pointer-events:none and lives above the overlays.
   // RAF-debounced to avoid layout thrashing during React re-renders.
   // -------------------------------------------------------------------------
-  function fitOverlayToContent(classFragments) {
-    const PAD  = 8; // px gap between overlay right edge and toolbar left edge
-    let   rafId = null;
+  function markToolbarArea(classFragments) {
+    const marker = document.createElement('div');
+    marker.id = 'dnd-toolbar-marker';
+    document.body.appendChild(marker);
+
+    let rafId = null;
 
     function update() {
-      const rects = classFragments
+      const els = classFragments
         .map(f => document.querySelector(`[class*="${f}"]`))
-        .filter(Boolean)
-        .map(el => el.getBoundingClientRect())
-        .filter(r => r.width > 0 && r.height > 0);
+        .filter(Boolean);
 
-      if (!rects.length) return;
+      if (!els.length) { marker.style.display = 'none'; return; }
 
-      // Leftmost edge of any toolbar element = where our overlay must end
-      const toolbarLeft  = Math.min(...rects.map(r => r.left));
-      const rightMargin  = Math.max(0, window.innerWidth - toolbarLeft + PAD);
+      const rects = els.map(el => el.getBoundingClientRect())
+                       .filter(r => r.width > 0 && r.height > 0);
+      if (!rects.length) { marker.style.display = 'none'; return; }
 
-      bgOverlay.style.right  = rightMargin + 'px';
-      gifOverlay.style.right = rightMargin + 'px';
-      // Clear any leftover clip-path from previous attempts
-      bgOverlay.style.clipPath  = '';
-      gifOverlay.style.clipPath = '';
+      // Union bounding box of all toolbar elements
+      const top    = Math.min(...rects.map(r => r.top));
+      const left   = Math.min(...rects.map(r => r.left));
+      const right  = Math.max(...rects.map(r => r.right));
+      const bottom = Math.max(...rects.map(r => r.bottom));
+
+      marker.style.display = 'block';
+      marker.style.top     = top  + 'px';
+      marker.style.left    = left + 'px';
+      marker.style.width   = (right - left) + 'px';
+      marker.style.height  = (bottom - top) + 'px';
     }
 
     function schedule() {
