@@ -43,7 +43,8 @@ async function sendAudio(msg) {
 // Broadcast to all DDB game tabs
 // -------------------------------------------------------------------------
 async function broadcastToTabs(msg) {
-  const tabs = await chrome.tabs.query({ url: 'https://www.dndbeyond.com/games/*' });
+  // Use broad pattern to also catch ?spectator=true and other query-string variants
+  const tabs = await chrome.tabs.query({ url: '*://www.dndbeyond.com/*' });
   for (const tab of tabs) {
     chrome.tabs.sendMessage(tab.id, msg).catch(() => {});
   }
@@ -114,7 +115,14 @@ function subscribeToSession(sessionId, campaignId) {
     }, (payload) => {
       if (payload.new) broadcastToTabs({ type: 'NOTES_CHANGED', content: payload.new.content ?? '' });
     })
-    .subscribe();
+    .subscribe((status, err) => {
+      if (err) console.error('[SW] Realtime error:', err.message ?? err);
+      console.log('[SW] Realtime status:', status);
+      // If channel closes or errors, reset so PING triggers a re-subscribe
+      if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        realtimeChannel = null;
+      }
+    });
 
   // Load current active scene on startup
   sb.from('sessions').select('active_scene_id').eq('id', sessionId).single()

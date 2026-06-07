@@ -10,7 +10,7 @@
   ],
 
   "host_permissions": [
-    "https://www.dndbeyond.com/games/*"
+    "https://www.dndbeyond.com/*"
   ],
 
   "background": {

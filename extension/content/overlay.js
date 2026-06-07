@@ -1154,21 +1154,24 @@
     const bgToggle = body.querySelector('#dnd-bg-toggle');
     if (bgToggle) {
       bgToggle.addEventListener('click', async () => {
-        if (!_activeDmScene) return;
         const newOn = bgToggle.classList.contains('off');
         const newOpacity = newOn ? 1 : 0;
-        _activeDmScene.bg_opacity = newOpacity;
         bgToggle.textContent = newOn ? 'AN' : 'AUS';
         bgToggle.classList.toggle('on', newOn);
         bgToggle.classList.toggle('off', !newOn);
         if (!combatActive) {
           bgOverlay.style.setProperty('--bg-opacity', newOpacity);
         }
-        await chrome.runtime.sendMessage({
-          type: 'SCENE_UPDATE_OPACITY',
-          sceneId: _activeDmScene.id,
-          opacity: newOpacity,
-        });
+        // If a real scene is active, persist the opacity to DB
+        if (_activeDmScene) {
+          _activeDmScene.bg_opacity = newOpacity;
+          await chrome.runtime.sendMessage({
+            type: 'SCENE_UPDATE_OPACITY',
+            sceneId: _activeDmScene.id,
+            opacity: newOpacity,
+          });
+        }
+        // If no scene (default-BG mode), just toggle the visual – nothing to persist
       });
     }
 
