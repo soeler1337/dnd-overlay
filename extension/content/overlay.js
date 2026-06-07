@@ -720,15 +720,22 @@
 
       if (!match) {
         // No overlay scene matches the DDB scene name → fall back to default
-        // (hide background; if a scene named "Default" exists, use that instead)
         const fallback = scenes.find(s => s.name.trim().toLowerCase() === 'default');
-        if (fallback && _activeDmScene?.id !== fallback.id) {
-          applyScene(fallback, combatActive);
-          chrome.runtime.sendMessage({ type: 'SCENE_SWITCH', sceneId: fallback.id, campaignId }).catch(() => {});
-        } else if (!fallback) {
-          // No default scene → use default background URL if available, else hide
+        console.log('[DnD] No scene match for:', name,
+          '| fallback:', fallback?.name ?? 'none',
+          '| _dndDefaultBackground:', window._dndDefaultBackground ?? 'null');
+        if (fallback) {
+          if (_activeDmScene?.id !== fallback.id) {
+            // Force bg_opacity on so the default background is always visible
+            if (!fallback.bg_opacity && window._dndDefaultBackground) fallback.bg_opacity = 1;
+            applyScene(fallback, combatActive);
+            chrome.runtime.sendMessage({ type: 'SCENE_SWITCH', sceneId: fallback.id, campaignId }).catch(() => {});
+          }
+        } else {
+          // No Default scene → use raw default background URL if available, else hide
           _activeDmScene = null;
           const defBg = window._dndDefaultBackground || null;
+          console.log('[DnD] Showing defBg:', defBg);
           setBackground(defBg, defBg ? 1 : 0);
           const nameEl = document.getElementById('dnd-active-scene-name');
           if (nameEl) nameEl.textContent = name + ' –';
@@ -1250,12 +1257,6 @@
         <button class="dnd-scene-btn" data-scene-id="${scene.id}">
           ${scene.is_combat ? '&#x2694;' : '&#x1F3D5;'} ${esc(scene.name)}
         </button>
-        <div class="dnd-opacity-row">
-          <span class="dnd-opacity-label">Hintergrund</span>
-          <button class="dnd-scene-toggle ${bgOn ? 'on' : 'off'}" data-scene-id="${scene.id}">
-            ${bgOn ? 'AN' : 'AUS'}
-          </button>
-        </div>
       `;
 
       // Scene switch button
@@ -1289,26 +1290,6 @@
           applyWeather(preset);
           chrome.runtime.sendMessage({ type: 'WEATHER_SET', preset, sceneId: scene.id, volume: wVol });
         }
-      });
-
-      // Feature 2: Opacity toggle (AN/AUS)
-      const toggleEl = wrap.querySelector('.dnd-scene-toggle');
-      toggleEl.addEventListener('click', async () => {
-        const newOn      = toggleEl.classList.contains('off'); // flipping
-        const newOpacity = newOn ? 1 : 0;
-        scene.bg_opacity = newOpacity;
-        toggleEl.textContent = newOn ? 'AN' : 'AUS';
-        toggleEl.classList.toggle('on', newOn);
-        toggleEl.classList.toggle('off', !newOn);
-        // Live update if active scene (and not combat)
-        if (wrap.classList.contains('active') && !combatActive) {
-          bgOverlay.style.setProperty('--bg-opacity', newOpacity);
-        }
-        await chrome.runtime.sendMessage({
-          type: 'SCENE_UPDATE_OPACITY',
-          sceneId: scene.id,
-          opacity: newOpacity,
-        });
       });
 
       container.appendChild(wrap);
