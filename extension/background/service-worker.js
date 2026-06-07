@@ -44,11 +44,8 @@ async function sendAudio(msg) {
 // -------------------------------------------------------------------------
 async function broadcastToTabs(msg) {
   const tabs = await chrome.tabs.query({ url: 'https://www.dndbeyond.com/*' });
-  console.log('[SW] broadcastToTabs', msg.type, '→', tabs.length, 'tabs', tabs.map(t => t.id + ':' + t.url?.slice(0,60)));
   for (const tab of tabs) {
-    chrome.tabs.sendMessage(tab.id, msg).catch((e) => {
-      console.warn('[SW] sendMessage to tab', tab.id, 'failed:', e.message);
-    });
+    chrome.tabs.sendMessage(tab.id, msg).catch(() => {});
   }
 }
 
@@ -73,7 +70,6 @@ function subscribeToSession(sessionId, campaignId) {
       table:  'sessions',
       filter: 'id=eq.' + sessionId,
     }, async (payload) => {
-      console.log('[SW] RT sessions UPDATE received, active_scene_id:', payload.new?.active_scene_id);
       const wasActive    = activeSceneId;
       activeSceneId      = payload.new.active_scene_id;
       const isCombat     = payload.new.is_combat;
@@ -87,7 +83,6 @@ function subscribeToSession(sessionId, campaignId) {
       }
 
       if (activeSceneId !== wasActive || payload.old.is_combat !== isCombat) {
-        console.log('[SW] Scene changed in DB →', activeSceneId, 'combat:', isCombat);
         const { data: scene } = await sb
           .from('scenes')
           .select('*')
@@ -121,7 +116,7 @@ function subscribeToSession(sessionId, campaignId) {
     })
     .subscribe((status, err) => {
       if (err) console.error('[SW] Realtime error:', err.message ?? err);
-      console.log('[SW] Realtime status:', status, '| channel:', 'session-' + sessionId);
+      console.log('[SW] Realtime status:', status);
       // Do NOT reset realtimeChannel here – Supabase handles its own reconnect.
       // Only reset if the channel is permanently dead (error, not transient close).
       if (status === 'CHANNEL_ERROR') {
@@ -247,15 +242,11 @@ async function handleMessage(msg) {
     }
 
     case 'SCENE_SWITCH': {
-      console.log('[SW] SCENE_SWITCH sceneId:', msg.sceneId, 'campaignId:', msg.campaignId);
       const { error } = await sb
         .from('sessions')
         .update({ active_scene_id: msg.sceneId, updated_at: new Date().toISOString() })
         .eq('campaign_id', msg.campaignId);
-      if (error) {
-        console.error('[SW] SCENE_SWITCH DB error:', error.message);
-        throw error;
-      }
+      if (error) throw error;
       // Broadcast immediately to all local tabs (same browser / incognito).
       // Remote players on other devices receive it via the Realtime subscription.
       const { data: scene } = await sb.from('scenes').select('*').eq('id', msg.sceneId).single();
@@ -263,7 +254,6 @@ async function handleMessage(msg) {
         const isCombat = !!(msg.isCombat ?? false);
         broadcastToTabs({ type: 'SCENE_CHANGED', scene, isCombat });
         playSceneAudio(scene, isCombat);
-        console.log('[SW] SCENE_SWITCH broadcast done →', scene.name);
       }
       return { ok: true };
     }

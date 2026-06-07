@@ -1,7 +1,7 @@
-# DnD Overlay – v2
+# DnD Overlay – v2.1
 
 Chrome Extension (MV3) als Echtzeit-Overlay fuer DnD Beyond Spielsitzungen (`dndbeyond.com/games/[game-id]`).
-Der DM steuert Szenen, Musik und Initiative – alle Spieler sehen und hoeren die Aenderung sofort ueber Supabase Realtime.
+Der DM steuert Szenen, Musik und Initiative – alle Spieler sehen und hoeren die Aenderung sofort.
 
 ---
 
@@ -21,8 +21,13 @@ Der DM steuert Szenen, Musik und Initiative – alle Spieler sehen und hoeren di
 | Einklappbare Panel-Sektionen | ✓ | ✓ |
 | Stream-Overlay (OBS) | Hintergrund + Handout + Wetter + Wuerfellog | – |
 
-### Szenen-Sync (automatisch)
-Wenn der DM in DDB eine Szene auswechselt, prueft die Extension ob eine Overlay-Szene mit demselben Namen existiert und wechselt automatisch. Gibt es keine passende Szene, wird eine Szene namens **„Default"** aktiviert – oder der Hintergrund ausgeblendet.
+### Szenen-Sync
+Szenen-Wechsel werden **direkt** an alle offenen DDB-Tabs gesendet (kein Realtime-Umweg noetig). Spieler auf anderen Geraeten erhalten die Aenderung zusaetzlich ueber Supabase Realtime.
+
+Wenn der DM in DDB eine Szene auswechselt, prueft die Extension ob eine Overlay-Szene mit demselben Namen existiert und wechselt automatisch. Gibt es keine passende Szene, wird eine Szene namens **„Default"** aktiviert – oder der Standard-Hintergrund angezeigt und an alle Spieler gesendet.
+
+### Testen mit zwei Browserfenstern
+Zum lokalen Testen (DM + Spieler am gleichen PC) ein **Inkognito-Fenster** oeffnen und dort als Spieler einloggen. Die Extension muss dafuer in Chrome unter `chrome://extensions` → **„In Inkognito zulassen"** aktiviert sein.
 
 ---
 
