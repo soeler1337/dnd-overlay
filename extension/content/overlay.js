@@ -78,22 +78,20 @@
   }
 
   function liftAboveBg(classFragment) {
-    const seen = new WeakSet();
+    const seen   = new WeakSet();
+    let   rafId  = null;
 
     function lift(el) {
-      // Walk the element itself + every ancestor up to <body>
       let node = el;
       while (node && node !== document.documentElement) {
         if (!seen.has(node)) {
           seen.add(node);
           const cs  = window.getComputedStyle(node);
           const pos = cs.position;
-          // Give every node that can carry z-index a value above our overlays
           if (pos !== 'static' || createsStackingContext(cs)) {
             const zi = parseInt(cs.zIndex);
             if (isNaN(zi) || zi < LIFT_Z) {
               node.style.setProperty('z-index', String(LIFT_Z), 'important');
-              // Ensure it has a position so z-index takes effect
               if (pos === 'static') node.style.setProperty('position', 'relative', 'important');
             }
           }
@@ -107,17 +105,27 @@
       if (el) lift(el);
     }
 
-    // Retry on every DOM change — handles React re-renders / lazy loading
-    new MutationObserver(tryLift).observe(document.body, { childList: true, subtree: true });
+    function scheduleLift() {
+      if (rafId) return;
+      rafId = requestAnimationFrame(() => { rafId = null; tryLift(); });
+    }
+
+    // Retry on DOM changes – handles React re-renders / lazy loading.
+    // RAF-debounced so we don't thrash on every mutation in large React trees.
+    new MutationObserver(scheduleLift).observe(document.body, { childList: true, subtree: true });
     tryLift();
   }
 
-  // DDB scene-switcher bar (top) – z-index lift works for this one
+  // DDB scene-switcher bar (top) – z-index lift works for this element
   liftAboveBg('scenarioMenuEncounters');
 
-  // DDB dice toolbar (bottom-right) – clip our OWN overlays so the toolbar
-  // area is simply transparent (no z-index fight with DDB's DOM at all).
-  clipOverlayAround('bottomRightTools');
+  // DDB toolbar panels – punch transparent holes in our own overlays so
+  // these areas are always accessible.  Class names confirmed via DevTools:
+  //   styles-module__J127eW__topRight     (top-right controls)
+  //   styles-module__J127eW__right        (right-side controls)
+  //   styles-module__J127eW__bottomRight  (dice roller, bottom-right)
+  // All three are clipped in one pass so the polygons don't overwrite each other.
+  clipOverlayAroundAll(['__topRight', '__right', '__bottomRight']);
 
   function setBackground(url, opacity) {
     if (url) {
@@ -517,33 +525,39 @@
   }
 
   // -------------------------------------------------------------------------
-  // Clip our bg/gif overlays so a specific DDB element area stays transparent.
-  // This avoids z-index fights with DDB's nested stacking contexts entirely –
-  // we just punch a hole in our own element instead of lifting theirs.
+  // Punch transparent holes in our overlays for a set of DDB UI elements.
+  // Each fragment is matched via [class*="fragment"].  All matched elements'
+  // bounding boxes are unioned into a single right-column notch so that
+  // only ONE clip-path is written (multiple passes would overwrite each other).
+  // RAF-debounced to avoid thrashing during React re-renders.
   // -------------------------------------------------------------------------
-  function clipOverlayAround(classFragment) {
-    const PAD = 6; // extra breathing room around element in px
+  function clipOverlayAroundAll(classFragments) {
+    const PAD  = 6;
+    let rafId  = null;
 
     function computeClip() {
-      const el = document.querySelector(`[class*="${classFragment}"]`);
-      if (!el) return;
+      const rects = classFragments
+        .map(f => document.querySelector(`[class*="${f}"]`))
+        .filter(Boolean)
+        .map(el => el.getBoundingClientRect())
+        .filter(r => r.width > 0 && r.height > 0);
 
-      const rect  = el.getBoundingClientRect();
-      if (!rect.width || !rect.height) return;
+      if (!rects.length) return;
 
       const offL = parseInt(bgOverlay.style.left || '270');
       const W    = window.innerWidth  - offL;
       const H    = window.innerHeight;
 
-      // Toolbar rect in overlay-relative coords (overlay starts at x=offL, y=0)
-      const nx = Math.max(0, rect.left   - offL - PAD);
-      const ny = Math.max(0, rect.top           - PAD);
+      // Union of all toolbar bounding boxes → single notch coordinates
+      const combinedLeft = Math.min(...rects.map(r => r.left));
+      const combinedTop  = Math.min(...rects.map(r => r.top));
 
-      // Build a polygon that is the full overlay rectangle MINUS a bottom-right
-      // corner notch where the toolbar lives.
-      // Points go clockwise around the visible area:
-      //   top-left → top-right → down right edge → notch top-left →
-      //   notch bottom-left → overlay bottom-left
+      const nx = Math.max(0, combinedLeft - offL - PAD);
+      const ny = Math.max(0, combinedTop        - PAD);
+
+      // Polygon = full overlay MINUS a right-side column from y=ny downward.
+      // Clockwise: top-left → top-right → notch top → notch left-edge →
+      //            bottom-left-of-notch → bottom-left-of-overlay
       const poly = [
         `0px 0px`,
         `${W}px 0px`,
@@ -558,9 +572,13 @@
       gifOverlay.style.clipPath = val;
     }
 
-    // Run on DOM changes (element may load late) and window resize
-    new MutationObserver(computeClip).observe(document.body, { childList: true, subtree: true });
-    window.addEventListener('resize', computeClip);
+    function scheduleClip() {
+      if (rafId) return;
+      rafId = requestAnimationFrame(() => { rafId = null; computeClip(); });
+    }
+
+    new MutationObserver(scheduleClip).observe(document.body, { childList: true, subtree: true });
+    window.addEventListener('resize', scheduleClip);
     computeClip();
   }
 
@@ -914,7 +932,7 @@
       const scene    = (window._dndScenes || []).find(s => s.id === sceneId);
       if (!scene) return;
       const isCombat = body.querySelector('#dnd-initiative-btn')?.dataset.active === 'true';
-      const vol       = parseFloat(body.querySelector('#dnd-volume-slider')?.value ?? 0.8);
+      const vol = parseFloat(body.querySelector('#dnd-volume-slider')?.value ?? 0.8);
       const url       = resolveAudioUrl(scene, isCombat);
       if (url) chrome.runtime.sendMessage({ type: 'AUDIO_PLAY', url, volume: vol });
     });
