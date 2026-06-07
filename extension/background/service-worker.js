@@ -516,3 +516,12 @@ async function tryResubscribe() {
 chrome.runtime.onInstalled.addListener(() => {
   console.log('[DnD Overlay] Extension installed / updated.');
 });
+
+// Stop audio when the last DDB game tab is closed
+chrome.tabs.onRemoved.addListener(async () => {
+  const remaining = await chrome.tabs.query({ url: 'https://www.dndbeyond.com/*' });
+  if (remaining.length === 0) {
+    sendAudio({ type: 'STOP_MUSIC' });
+    sendAudio({ type: 'STOP_WEATHER' });
+  }
+});
