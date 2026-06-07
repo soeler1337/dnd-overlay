@@ -43,12 +43,12 @@ async function sendAudio(msg) {
 // Broadcast to all DDB game tabs
 // -------------------------------------------------------------------------
 async function broadcastToTabs(msg) {
-  // Must match host_permissions exactly (https://) – using *:// breaks tabs.query
-  // without "tabs" permission. Query-string params like ?spectator=true are ignored
-  // by Chrome URL matching so https://www.dndbeyond.com/* covers spectator tabs too.
   const tabs = await chrome.tabs.query({ url: 'https://www.dndbeyond.com/*' });
+  console.log('[SW] broadcastToTabs', msg.type, '→', tabs.length, 'tabs', tabs.map(t => t.id + ':' + t.url?.slice(0,60)));
   for (const tab of tabs) {
-    chrome.tabs.sendMessage(tab.id, msg).catch(() => {});
+    chrome.tabs.sendMessage(tab.id, msg).catch((e) => {
+      console.warn('[SW] sendMessage to tab', tab.id, 'failed:', e.message);
+    });
   }
 }
 
@@ -86,6 +86,7 @@ function subscribeToSession(sessionId, campaignId) {
       }
 
       if (activeSceneId !== wasActive || payload.old.is_combat !== isCombat) {
+        console.log('[SW] Scene changed in DB →', activeSceneId, 'combat:', isCombat);
         const { data: scene } = await sb
           .from('scenes')
           .select('*')
@@ -119,7 +120,7 @@ function subscribeToSession(sessionId, campaignId) {
     })
     .subscribe((status, err) => {
       if (err) console.error('[SW] Realtime error:', err.message ?? err);
-      console.log('[SW] Realtime status:', status);
+      console.log('[SW] Realtime status:', status, '| channel:', 'session-' + sessionId);
       // Do NOT reset realtimeChannel here – Supabase handles its own reconnect.
       // Only reset if the channel is permanently dead (error, not transient close).
       if (status === 'CHANNEL_ERROR') {
