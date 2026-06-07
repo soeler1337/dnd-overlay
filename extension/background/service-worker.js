@@ -43,8 +43,10 @@ async function sendAudio(msg) {
 // Broadcast to all DDB game tabs
 // -------------------------------------------------------------------------
 async function broadcastToTabs(msg) {
-  // Use broad pattern to also catch ?spectator=true and other query-string variants
-  const tabs = await chrome.tabs.query({ url: '*://www.dndbeyond.com/*' });
+  // Must match host_permissions exactly (https://) – using *:// breaks tabs.query
+  // without "tabs" permission. Query-string params like ?spectator=true are ignored
+  // by Chrome URL matching so https://www.dndbeyond.com/* covers spectator tabs too.
+  const tabs = await chrome.tabs.query({ url: 'https://www.dndbeyond.com/*' });
   for (const tab of tabs) {
     chrome.tabs.sendMessage(tab.id, msg).catch(() => {});
   }
