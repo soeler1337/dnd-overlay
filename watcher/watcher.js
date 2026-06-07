@@ -269,14 +269,15 @@ async function syncDefault(gameDir, campaignId, gameId) {
   const defaultDir = path.join(gameDir, 'default');
   if (!fs.existsSync(defaultDir)) return;
 
-  function firstAudioIn(subdir) {
+  function firstFileIn(subdir, matchFn) {
     const dir = path.join(defaultDir, subdir);
     if (!fs.existsSync(dir)) return null;
-    return fs.readdirSync(dir).find(f => isAudio(f)) || null;
+    return fs.readdirSync(dir).find(f => matchFn(f)) || null;
   }
 
-  const ambientFile = firstAudioIn('ambient');
-  const combatFile  = firstAudioIn('combat');
+  const ambientFile = firstFileIn('ambient',    isAudio);
+  const combatFile  = firstFileIn('combat',     isAudio);
+  const bgFile      = firstFileIn('background', isImage);
   const updates     = {};
 
   if (ambientFile) {
@@ -295,12 +296,20 @@ async function syncDefault(gameDir, campaignId, gameId) {
       path.join(defaultDir, 'combat', combatFile),
     );
   }
+  if (bgFile) {
+    console.log(`[Watcher] Default Hintergrund: ${gameId}/default/background/${bgFile}`);
+    updates.default_background_url = await uploadFile(
+      'backgrounds',
+      sanitizePath(`${campaignId}/default/background/${bgFile}`),
+      path.join(defaultDir, 'background', bgFile),
+    );
+  }
 
   if (!Object.keys(updates).length) return;
 
   const { error } = await sb.from('campaigns').update(updates).eq('id', campaignId);
-  if (error) console.error('[Watcher] Default-Musik DB-Fehler:', error.message);
-  else console.log(`[Watcher] Default-Musik synced (${gameId})`);
+  if (error) console.error('[Watcher] Default-Assets DB-Fehler:', error.message);
+  else console.log(`[Watcher] Default-Assets synced (${gameId})`);
 }
 
 // -------------------------------------------------------------------------

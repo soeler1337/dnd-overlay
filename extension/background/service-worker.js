@@ -189,12 +189,13 @@ async function handleMessage(msg) {
     case 'DEFAULT_MUSIC_GET': {
       const { data } = await sb
         .from('campaigns')
-        .select('default_ambient_url, default_combat_url')
+        .select('default_ambient_url, default_combat_url, default_background_url')
         .eq('id', msg.campaignId)
         .single();
       return {
-        ambientUrl: data?.default_ambient_url ?? null,
-        combatUrl:  data?.default_combat_url  ?? null,
+        ambientUrl:    data?.default_ambient_url    ?? null,
+        combatUrl:     data?.default_combat_url     ?? null,
+        backgroundUrl: data?.default_background_url ?? null,
       };
     }
 

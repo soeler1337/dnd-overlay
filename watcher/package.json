@@ -1,0 +1,13 @@
+{
+  "name": "dnd-overlay-watcher",
+  "version": "0.1.0",
+  "description": "Local content watcher - syncs scenes and handouts to Supabase",
+  "main": "watcher.js",
+  "scripts": {
+    "start": "node watcher.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.0.0",
+    "dotenv": "^16.0.0"
+  }
+}

@@ -896,3 +896,23 @@
    start at top:64px. The scene-switcher bar (scenarioMenuEncounters) is
    additionally lifted via liftAboveBg() so its dropdown list, which opens
    below the header into the overlay area, still appears on top. */
+
+/* =========================================================
+   Collapsible section toggle (▾ / ▶ prepended to label)
+   ========================================================= */
+.dnd-collapse-btn {
+  all: unset;
+  cursor: pointer;
+  font-size: 9px;
+  color: var(--dnd-text-dim);
+  line-height: 1;
+  flex-shrink: 0;
+  transition: color var(--dnd-transition);
+  user-select: none;
+}
+
+.dnd-collapse-btn:hover { color: var(--dnd-gold); }
+
+/* Make section labels feel clickable when collapse is attached */
+.dnd-section-label.collapsible { cursor: pointer; }
+.dnd-section-label.collapsible:hover .dnd-collapse-btn { color: var(--dnd-gold); }

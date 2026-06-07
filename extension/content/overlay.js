@@ -480,6 +480,8 @@
 
   // Initiative state tracked globally so applyWeather() can respect it.
   let combatActive = false;
+  // Currently active scene (updated by applyScene and startScenarioNameObserver)
+  let _activeDmScene = null;
 
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.type === 'SCENE_CHANGED') {
@@ -508,23 +510,24 @@
   // Combat always forces 0. Toggle stored in scene.bg_opacity (>0 = on, 0 = off).
   function applyScene(scene, isCombat) {
     combatActive = !!isCombat;
+    _activeDmScene = scene;
     const opacity = isCombat ? 0 : (scene.bg_opacity > 0 ? 1 : 0);
-    setBackground(scene.background_url || null, opacity);
+    // Use scene background; fall back to default background if none set
+    const bgUrl = scene.background_url || window._dndDefaultBackground || null;
+    setBackground(bgUrl, opacity);
 
-    // Update active-scene indicator in DM panel if open
-    document.querySelectorAll('.dnd-scene-row').forEach(row => {
-      row.classList.toggle('active', row.dataset.sceneId === scene.id);
-    });
+    // Update scene name display in DM panel
+    const nameEl = document.getElementById('dnd-active-scene-name');
+    if (nameEl) nameEl.textContent = scene.name || '—';
 
-    // Update opacity toggles in scene rows
-    document.querySelectorAll('.dnd-scene-toggle').forEach(btn => {
-      if (btn.dataset.sceneId === scene.id) {
-        const on = scene.bg_opacity > 0;
-        btn.textContent = on ? 'AN' : 'AUS';
-        btn.classList.toggle('on', on);
-        btn.classList.toggle('off', !on);
-      }
-    });
+    // Update background toggle button in DM panel
+    const bgToggle = document.getElementById('dnd-bg-toggle');
+    if (bgToggle) {
+      const on = scene.bg_opacity > 0;
+      bgToggle.textContent = on ? 'AN' : 'AUS';
+      bgToggle.classList.toggle('on', on);
+      bgToggle.classList.toggle('off', !on);
+    }
   }
 
   // Initiative always wins: gif overlay hidden during combat.
@@ -536,7 +539,6 @@
     if (combatActive) return; // initiative > wetter
     if (preset?.gif_url) {
       gifOverlay.style.backgroundImage = `url(${JSON.stringify(preset.gif_url)})`;
-      gifOverlay.style.left = bgOverlay.style.left || '270px';
       gifOverlay.classList.add('active');
     } else {
       gifOverlay.classList.remove('active');
@@ -632,7 +634,7 @@
       <form id="dnd-login-form" novalidate>
         <div class="dnd-field">
           <label for="dnd-user">Benutzername</label>
-          <input id="dnd-user" type="text" autocomplete="username" placeholder="soeler" />
+          <input id="dnd-user" type="text" autocomplete="username" placeholder="Benutzername" />
         </div>
         <div class="dnd-field">
           <label for="dnd-password">Passwort</label>
@@ -686,7 +688,7 @@
     isDm ? renderDm(profile) : renderPlayer(profile, session);
     if (profile?.campaign_id) {
       startDiceObserver(profile.campaign_id);
-      if (isDm) startScenarioNameObserver(profile.campaign_id);
+      // startScenarioNameObserver is called from renderDm after _dndScenes is populated
     }
   }
 
@@ -707,33 +709,56 @@
       if (!el) return;
       const name = el.textContent.trim();
       if (!name || name === lastText) return;
+      if (!ready) {
+        lastText = name; // track changes silently during init, but don't act on them
+        return;
+      }
       lastText = name;
-      if (!ready) return; // skip the initial value set on load
 
       const scenes = window._dndScenes || [];
       const match  = scenes.find(s => s.name.trim().toLowerCase() === name.toLowerCase());
-      if (!match) return;
 
-      // Skip if already the active scene in our panel
-      const activeRow = document.querySelector('.dnd-scene-row.active');
-      if (activeRow?.dataset.sceneId === match.id) return;
+      if (!match) {
+        // No overlay scene matches the DDB scene name → fall back to default
+        // (hide background; if a scene named "Default" exists, use that instead)
+        const fallback = scenes.find(s => s.name.trim().toLowerCase() === 'default');
+        if (fallback && _activeDmScene?.id !== fallback.id) {
+          applyScene(fallback, combatActive);
+          chrome.runtime.sendMessage({ type: 'SCENE_SWITCH', sceneId: fallback.id, campaignId }).catch(() => {});
+        } else if (!fallback) {
+          // No default scene → just hide the background overlay
+          _activeDmScene = null;
+          setBackground(null, 0);
+          const nameEl = document.getElementById('dnd-active-scene-name');
+          if (nameEl) nameEl.textContent = name + ' –';
+          const bgToggle = document.getElementById('dnd-bg-toggle');
+          if (bgToggle) { bgToggle.textContent = 'AUS'; bgToggle.className = 'dnd-scene-toggle off'; }
+        }
+        return;
+      }
+
+      // Skip if already the active scene
+      if (_activeDmScene?.id === match.id) return;
+
+      // Apply locally immediately (no RT roundtrip delay)
+      applyScene(match, combatActive);
 
       chrome.runtime.sendMessage({ type: 'SCENE_SWITCH', sceneId: match.id, campaignId })
         .catch(() => {});
     }
 
-    // Capture the current name so first load doesn't trigger a switch
+    // Capture the current name so the initial page state doesn't trigger a switch
     const initEl = document.querySelector('[class*="scenarioName"]');
     if (initEl) lastText = initEl.textContent.trim();
-    setTimeout(() => { ready = true; }, 1500);
+    // Short delay: _dndScenes is already loaded when this runs (called from renderDm),
+    // just give the DDB DOM a moment to finish any pending React renders.
+    setTimeout(() => { ready = true; }, 300);
 
-    // Watch the whole scene bar container for DOM mutations
-    const container = document.querySelector('[class*="scenarioMenuEncounters"]')
-                   || document.body;
+    // Watch document.body — reliable even when DDB re-renders the scene bar
     new MutationObserver(() => {
       clearTimeout(debounce);
       debounce = setTimeout(onNameChange, 400);
-    }).observe(container, { childList: true, subtree: true, characterData: true });
+    }).observe(document.body, { childList: true, subtree: true, characterData: true });
   }
 
   // -------------------------------------------------------------------------
@@ -806,6 +831,41 @@
     observer.observe(document.body, { childList: true, subtree: true });
   }
 
+  // -------------------------------------------------------------------------
+  // Collapsible sections – toggle visibility of everything below the label.
+  // Idempotent: safe to call again after a section re-renders (refresh).
+  // State persisted per-key in localStorage.
+  // -------------------------------------------------------------------------
+  function makeSectionCollapsible(containerId, storageKey) {
+    const el = document.getElementById(containerId);
+    if (!el) return;
+    const label = el.querySelector('.dnd-section-label');
+    if (!label) return;
+
+    const collapsed = localStorage.getItem(storageKey) === 'true';
+
+    // Add toggle arrow once
+    if (!label.querySelector('.dnd-collapse-btn')) {
+      const btn = document.createElement('button');
+      btn.className = 'dnd-collapse-btn';
+      label.prepend(btn);
+      label.classList.add('collapsible');
+      label.addEventListener('click', (e) => {
+        if (e.target.closest('.dnd-btn-refresh')) return; // refresh button still works
+        const cur = localStorage.getItem(storageKey) === 'true';
+        localStorage.setItem(storageKey, String(!cur));
+        makeSectionCollapsible(containerId, storageKey); // re-apply
+      });
+    }
+
+    // Apply current state
+    const btn = label.querySelector('.dnd-collapse-btn');
+    if (btn) btn.textContent = collapsed ? '▶' : '▾';
+    [...el.children].forEach(child => {
+      if (child !== label) child.style.display = collapsed ? 'none' : '';
+    });
+  }
+
   // -- DM view ---------------------------------------------------------------
   async function renderDm(profile) {
     body.innerHTML = `
@@ -819,6 +879,13 @@
           &#x2694; Initiative starten
         </button>
       </div>
+      <div id="dnd-scene-bar" style="margin-top:8px">
+        <div class="dnd-music-row">
+          <span class="dnd-opacity-label">&#x1F5FA; Szene</span>
+          <span id="dnd-active-scene-name" style="flex:1;font-size:12px;color:#c8a45a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0 6px">—</span>
+          <button id="dnd-bg-toggle" class="dnd-scene-toggle off">AUS</button>
+        </div>
+      </div>
       <div id="dnd-weather-bar" style="margin-top:8px">
         <div class="dnd-music-row">
           <span class="dnd-opacity-label">&#127783; Wetter</span>
@@ -828,9 +895,7 @@
         </div>
       </div>
       <hr class="dnd-divider" />
-      <div id="dnd-scenes-container">
-        <p class="dnd-placeholder">Szenen werden geladen...</p>
-      </div>
+      <div id="dnd-scenes-container"></div>
       <hr class="dnd-divider" />
       <div id="dnd-handouts-container"></div>
       <hr class="dnd-divider" />
@@ -912,14 +977,10 @@
     });
 
     body.querySelector('#dnd-music-play').addEventListener('click', () => {
-      const activeRow = body.querySelector('.dnd-scene-row.active');
-      if (!activeRow) return;
-      const sceneId   = activeRow.dataset.sceneId;
-      const scene    = (window._dndScenes || []).find(s => s.id === sceneId);
-      if (!scene) return;
+      if (!_activeDmScene) return;
       const isCombat = body.querySelector('#dnd-initiative-btn')?.dataset.active === 'true';
       const vol = parseFloat(body.querySelector('#dnd-volume-slider')?.value ?? 0.8);
-      const url       = resolveAudioUrl(scene, isCombat);
+      const url = resolveAudioUrl(_activeDmScene, isCombat);
       if (url) chrome.runtime.sendMessage({ type: 'AUDIO_PLAY', url, volume: vol });
     });
 
@@ -944,19 +1005,24 @@
       chrome.runtime.sendMessage({ type: 'SOUNDS_LIST', campaignId: profile.campaign_id }),
     ]);
 
-    // Cache default music URLs for resolveAudioUrl()
-    window._dndDefaultAmbient = defaultMusicResp.ambientUrl || null;
-    window._dndDefaultCombat  = defaultMusicResp.combatUrl  || null;
+    // Cache default asset URLs
+    window._dndDefaultAmbient    = defaultMusicResp.ambientUrl    || null;
+    window._dndDefaultCombat     = defaultMusicResp.combatUrl     || null;
+    window._dndDefaultBackground = defaultMusicResp.backgroundUrl || null;
 
     // Show status in UI
     const defStatus = body.querySelector('#dnd-default-music-status');
     if (defStatus) {
       const hasAmb = !!defaultMusicResp.ambientUrl;
       const hasCom = !!defaultMusicResp.combatUrl;
-      defStatus.textContent = hasAmb || hasCom
-        ? `${hasAmb ? '✓ Ambient' : ''}${hasAmb && hasCom ? ' · ' : ''}${hasCom ? '✓ Combat' : ''}`
-        : 'Kein Standard hinterlegt';
-      defStatus.style.color = hasAmb || hasCom ? '#7acc60' : '#6a6050';
+      const hasBg  = !!defaultMusicResp.backgroundUrl;
+      const parts  = [
+        hasBg  ? '✓ BG'     : '',
+        hasAmb ? '✓ Ambient': '',
+        hasCom ? '✓ Combat' : '',
+      ].filter(Boolean);
+      defStatus.textContent = parts.length ? parts.join(' · ') : 'Kein Standard hinterlegt';
+      defStatus.style.color = parts.length ? '#7acc60' : '#6a6050';
     }
 
     const session        = sessionResp.session;
@@ -978,16 +1044,11 @@
       globalWeatherSel.addEventListener('change', async () => {
         const presetId = globalWeatherSel.value;
         const preset   = weatherPresets.find(p => p.id === presetId) || null;
-        // Find active scene to persist
-        const activeRow = body.querySelector('.dnd-scene-row.active');
-        const sceneId   = activeRow?.dataset.sceneId || null;
-        if (sceneId) {
-          const scene = (window._dndScenes || []).find(s => s.id === sceneId);
-          if (scene) scene.weather_preset_id = presetId || null;
-        }
+        // Persist on active scene
+        if (_activeDmScene) _activeDmScene.weather_preset_id = presetId || null;
         applyWeather(preset);
         const wVol = parseFloat(body.querySelector('#dnd-weather-volume-slider')?.value ?? 0.3);
-        chrome.runtime.sendMessage({ type: 'WEATHER_SET', preset, sceneId, volume: wVol });
+        chrome.runtime.sendMessage({ type: 'WEATHER_SET', preset, sceneId: _activeDmScene?.id || null, volume: wVol });
       });
     } else if (globalWeatherSel && !weatherPresets.length) {
       globalWeatherSel.style.display = 'none';
@@ -1028,55 +1089,83 @@
       await chrome.runtime.sendMessage({
         type: 'INITIATIVE_TOGGLE', active: isCombatActive, campaignId: profile.campaign_id,
       });
-      // Apply locally - find current active scene
-      const activeRow = body.querySelector('.dnd-scene-row.active');
-      if (activeRow) {
-        const sceneId = activeRow.dataset.sceneId;
-        const scene   = (window._dndScenes || []).find(s => s.id === sceneId);
-        if (scene) {
-          applyScene(scene, isCombatActive);
-          const vol = parseFloat(body.querySelector('#dnd-volume-slider')?.value ?? 0.8);
-          const url = resolveAudioUrl(scene, isCombatActive);
-          if (url) chrome.runtime.sendMessage({ type: 'AUDIO_PLAY', url, volume: vol });
-          else     chrome.runtime.sendMessage({ type: 'AUDIO_STOP' });
-          // Initiative beendet: Wetter der aktiven Szene wieder anzeigen
-          if (!isCombatActive) {
-            const preset = weatherPresets.find(p => p.id === scene.weather_preset_id) || null;
-            applyWeather(preset);
-          } else {
-            // Initiative gestartet: Wetter-GIF ausblenden
-            gifOverlay.classList.remove('active');
-          }
+      // Apply locally using tracked active scene
+      if (_activeDmScene) {
+        applyScene(_activeDmScene, isCombatActive);
+        const vol = parseFloat(body.querySelector('#dnd-volume-slider')?.value ?? 0.8);
+        const url = resolveAudioUrl(_activeDmScene, isCombatActive);
+        if (url) chrome.runtime.sendMessage({ type: 'AUDIO_PLAY', url, volume: vol });
+        else     chrome.runtime.sendMessage({ type: 'AUDIO_STOP' });
+        if (!isCombatActive) {
+          const preset = weatherPresets.find(p => p.id === _activeDmScene.weather_preset_id) || null;
+          applyWeather(preset);
+        } else {
+          gifOverlay.classList.remove('active');
         }
       }
     });
 
     window._dndScenes = scenesResp.scenes || [];
 
-    // --- Feature 3: Refresh buttons ---
+    // Initialise active scene from current session
+    _activeDmScene = window._dndScenes.find(s => s.id === session?.active_scene_id) || null;
+    if (_activeDmScene) {
+      applyScene(_activeDmScene, session?.is_combat ?? false);
+      const preset = weatherPresets.find(p => p.id === _activeDmScene.weather_preset_id) || null;
+      applyWeather(preset);
+    }
+
+    // Wire up background toggle
+    const bgToggle = body.querySelector('#dnd-bg-toggle');
+    if (bgToggle) {
+      bgToggle.addEventListener('click', async () => {
+        if (!_activeDmScene) return;
+        const newOn = bgToggle.classList.contains('off');
+        const newOpacity = newOn ? 1 : 0;
+        _activeDmScene.bg_opacity = newOpacity;
+        bgToggle.textContent = newOn ? 'AN' : 'AUS';
+        bgToggle.classList.toggle('on', newOn);
+        bgToggle.classList.toggle('off', !newOn);
+        if (!combatActive) {
+          bgOverlay.style.setProperty('--bg-opacity', newOpacity);
+        }
+        await chrome.runtime.sendMessage({
+          type: 'SCENE_UPDATE_OPACITY',
+          sceneId: _activeDmScene.id,
+          opacity: newOpacity,
+        });
+      });
+    }
+
+    // Start scene-name observer now that _dndScenes is populated
+    startScenarioNameObserver(profile.campaign_id);
+
+    // --- Refresh helpers ---
     function doRefreshScenes() {
       chrome.runtime.sendMessage({ type: 'SCENES_LIST', campaignId: profile.campaign_id }).then(r => {
         window._dndScenes = r.scenes || [];
         renderSceneButtons(
           window._dndScenes,
-          body.querySelector('.dnd-scene-row.active')?.dataset.sceneId || session?.active_scene_id || null,
+          _activeDmScene?.id || session?.active_scene_id || null,
           profile.campaign_id,
           combatActive,
           weatherPresets,
           doRefreshScenes,
         );
+        makeSectionCollapsible('dnd-scenes-container', 'dnd-col-scenes');
       });
     }
 
     function doRefreshHandouts() {
       chrome.runtime.sendMessage({ type: 'HANDOUTS_LIST', campaignId: profile.campaign_id }).then(r => {
         renderHandouts(r.handouts || [], doRefreshHandouts);
+        makeSectionCollapsible('dnd-handouts-container', 'dnd-col-handouts');
       });
     }
 
     renderSceneButtons(
       window._dndScenes,
-      session?.active_scene_id || null,
+      _activeDmScene?.id || session?.active_scene_id || null,
       profile.campaign_id,
       session?.is_combat ?? false,
       weatherPresets,
@@ -1084,6 +1173,13 @@
     );
     renderHandouts(handoutsResp.handouts || [], doRefreshHandouts);
     renderSoundboard(soundsResp.sounds || [], profile.campaign_id);
+
+    // Apply collapsible state to all sections (preserved across reloads via localStorage)
+    makeSectionCollapsible('dnd-scenes-container',  'dnd-col-scenes');
+    makeSectionCollapsible('dnd-handouts-container', 'dnd-col-handouts');
+    makeSectionCollapsible('dnd-sounds-container',   'dnd-col-sounds');
+    makeSectionCollapsible('dnd-notes-container',    'dnd-col-notes');
+    makeSectionCollapsible('dnd-music-controls',     'dnd-col-music');
   }
 
   function updateInitiativeBtn(btn, active) {
@@ -1325,7 +1421,7 @@
         <div class="dnd-notes-rendered" id="dnd-notes-rendered"></div>
       </div>
       <hr class="dnd-divider" />
-      <div>
+      <div id="dnd-player-volume-container">
         <p class="dnd-section-label">Lautstaerke</p>
         <div class="dnd-music-row">
           <span class="dnd-opacity-label">&#9835; Musik</span>
@@ -1371,7 +1467,8 @@
 
     function doRefreshHandouts() {
       chrome.runtime.sendMessage({ type: 'HANDOUTS_LIST', campaignId: profile.campaign_id }).then(r => {
-        renderHandouts(r.handouts || [], doRefreshHandouts); // pass itself so button persists
+        renderHandouts(r.handouts || [], doRefreshHandouts);
+        makeSectionCollapsible('dnd-handouts-container', 'dnd-col-p-handouts');
       });
     }
     renderHandouts(handoutsResp.handouts || [], doRefreshHandouts);
@@ -1405,6 +1502,11 @@
       setBackground(null);
       renderLogin();
     });
+
+    // Collapsible sections for player panel
+    makeSectionCollapsible('dnd-handouts-container',      'dnd-col-p-handouts');
+    makeSectionCollapsible('dnd-player-notes-container',  'dnd-col-p-notes');
+    makeSectionCollapsible('dnd-player-volume-container', 'dnd-col-p-volume');
   }
 
   function esc(str) {

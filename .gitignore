@@ -8,6 +8,12 @@ extension/accounts.json
 # Dependencies
 watcher/node_modules/
 
-# DM-lokal: Watcher und Content bleiben auf deinem Rechner
-watcher/
-content/
+# DM-lokal: Spieler-Content (Bilder, Musik) bleibt auf dem Rechner des DMs
+/content/
+
+# Watcher: Secrets und Dependencies nicht tracken; Quellcode schon
+/watcher/node_modules/
+/watcher/.env
+
+# Alte Zips
+dnd-overlay-extension.zip
