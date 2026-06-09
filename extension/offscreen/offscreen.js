@@ -1,6 +1,11 @@
 // Offscreen Document - audio playback for MV3.
 // Three channels: scene music (loop) + weather (loop) + one-shot soundboard.
 
+// Master gain applied on top of the user's volume slider.
+// Keeps music at a comfortable background level even at 100% slider.
+const MUSIC_GAIN   = 0.4;  // slider 100% → actual 40%
+const WEATHER_GAIN = 0.6;  // weather sounds are often quieter sources, less reduction
+
 const music   = new Audio(); music.loop   = true;
 const weather = new Audio(); weather.loop = true;
 // Soundboard: pool of short Audio objects for overlapping one-shots
@@ -15,7 +20,7 @@ chrome.runtime.onMessage.addListener((msg) => {
 
     case 'PLAY_MUSIC':
       if (msg.url && music.src !== msg.url) music.src = msg.url;
-      if (msg.volume !== undefined) music.volume = msg.volume;
+      if (msg.volume !== undefined) music.volume = Math.max(0, Math.min(1, msg.volume * MUSIC_GAIN));
       music.play().catch(e => console.warn('[Offscreen] music play blocked:', e.message));
       break;
 
@@ -25,12 +30,12 @@ chrome.runtime.onMessage.addListener((msg) => {
       break;
 
     case 'SET_MUSIC_VOLUME':
-      music.volume = Math.max(0, Math.min(1, msg.volume));
+      music.volume = Math.max(0, Math.min(1, msg.volume * MUSIC_GAIN));
       break;
 
     case 'PLAY_WEATHER':
       if (msg.url && weather.src !== msg.url) weather.src = msg.url;
-      if (msg.volume !== undefined) weather.volume = msg.volume;
+      if (msg.volume !== undefined) weather.volume = Math.max(0, Math.min(1, msg.volume * WEATHER_GAIN));
       weather.play().catch(e => console.warn('[Offscreen] weather play blocked:', e.message));
       break;
 
@@ -40,7 +45,7 @@ chrome.runtime.onMessage.addListener((msg) => {
       break;
 
     case 'SET_WEATHER_VOLUME':
-      weather.volume = Math.max(0, Math.min(1, msg.volume));
+      weather.volume = Math.max(0, Math.min(1, msg.volume * WEATHER_GAIN));
       break;
 
     case 'PLAY_SOUND': {
