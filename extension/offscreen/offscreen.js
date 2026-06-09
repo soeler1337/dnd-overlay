@@ -5,6 +5,7 @@
 // Keeps music at a comfortable background level even at 100% slider.
 const MUSIC_GAIN   = 0.4;  // slider 100% → actual 40%
 const WEATHER_GAIN = 0.6;  // weather sounds are often quieter sources, less reduction
+const SFX_GAIN     = 0.5;  // soundboard one-shots
 
 const music   = new Audio(); music.loop   = true;
 const weather = new Audio(); weather.loop = true;
@@ -53,7 +54,7 @@ chrome.runtime.onMessage.addListener((msg) => {
       const sfx = sfxPool[sfxIdx % SFX_POOL_SIZE];
       sfxIdx++;
       sfx.src    = msg.url;
-      sfx.volume = Math.max(0, Math.min(1, msg.volume ?? 0.9));
+      sfx.volume = Math.max(0, Math.min(1, (msg.volume ?? 0.9) * SFX_GAIN));
       sfx.currentTime = 0;
       sfx.play().catch(e => console.warn('[Offscreen] sfx play blocked:', e.message));
       break;
