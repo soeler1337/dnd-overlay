@@ -529,6 +529,11 @@
       }
     }
     if (msg.type === 'WEATHER_CHANGED') applyWeather(msg.preset);
+    if (msg.type === 'DEFAULT_BG_CHANGED') {
+      // DM toggled background while no overlay scene is active
+      const defBg = window._dndDefaultBackground || null;
+      if (defBg) setBackground(defBg, msg.visible ? 1 : 0);
+    }
     if (msg.type === 'SOUND_PLAY') {
       // Players play the one-shot locally (SW already plays for DM via offscreen)
       const sfx = new Audio(msg.url);
@@ -1115,7 +1120,7 @@
         if (_activeDmScene) _activeDmScene.weather_preset_id = presetId || null;
         applyWeather(preset);
         const wVol = parseFloat(body.querySelector('#dnd-weather-volume-slider')?.value ?? 0.3);
-        safeMsg({ type: 'WEATHER_SET', preset, sceneId: _activeDmScene?.id || null, volume: wVol });
+        safeMsg({ type: 'WEATHER_SET', preset, sceneId: _activeDmScene?.id || null, campaignId: profile.campaign_id, volume: wVol });
       });
     } else if (globalWeatherSel && !weatherPresets.length) {
       globalWeatherSel.style.display = 'none';
@@ -1211,16 +1216,14 @@
         if (!combatActive) {
           bgOverlay.style.setProperty('--bg-opacity', newOpacity);
         }
-        // If a real scene is active, persist the opacity to DB
         if (_activeDmScene) {
+          // Real scene active – persist bg_opacity on the scene row
           _activeDmScene.bg_opacity = newOpacity;
-          await safeMsg({
-            type: 'SCENE_UPDATE_OPACITY',
-            sceneId: _activeDmScene.id,
-            opacity: newOpacity,
-          });
+          await safeMsg({ type: 'SCENE_UPDATE_OPACITY', sceneId: _activeDmScene.id, opacity: newOpacity });
+        } else {
+          // Default scene – sync visibility via sessions table so remote players get it
+          safeMsg({ type: 'DEFAULT_BG_TOGGLE', visible: newOn, campaignId: profile.campaign_id });
         }
-        // If no scene (default-BG mode), just toggle the visual – nothing to persist
       });
     }
 
