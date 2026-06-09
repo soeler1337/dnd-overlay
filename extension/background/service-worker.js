@@ -119,7 +119,7 @@ function subscribeToSession(sessionId, campaignId) {
         return;
       }
       if (!activeSceneId) {
-        // No active overlay scene – still need to handle combat toggle for remote players
+        // No active overlay scene – handle combat toggle, weather and bg changes
         if (payload.old?.is_combat !== payload.new.is_combat) {
           broadcastToTabs({ type: 'COMBAT_CHANGED', isCombat: activeCombat });
           const { data: campaign } = await sb.from('campaigns')
@@ -132,8 +132,23 @@ function subscribeToSession(sessionId, campaignId) {
           );
           if (url) sendAudio({ type: 'PLAY_MUSIC', url, volume: vol });
           else     sendAudio({ type: 'STOP_MUSIC' });
-          // Hide/restore weather on combat toggle
           if (activeCombat) playWeatherAudio(null, true);
+        }
+        // Weather changed on default scene
+        if (payload.old?.current_weather_preset_id !== payload.new.current_weather_preset_id) {
+          const presetId = payload.new.current_weather_preset_id;
+          if (presetId) {
+            const { data: preset } = await sb.from('weather_presets').select('*').eq('id', presetId).single();
+            broadcastToTabs({ type: 'WEATHER_CHANGED', preset: preset || null });
+            await playWeatherAudio(preset?.sound_url || null);
+          } else {
+            broadcastToTabs({ type: 'WEATHER_CHANGED', preset: null });
+            await playWeatherAudio(null);
+          }
+        }
+        // Background visibility toggled on default scene
+        if (payload.old?.default_bg_visible !== payload.new.default_bg_visible) {
+          broadcastToTabs({ type: 'DEFAULT_BG_CHANGED', visible: !!payload.new.default_bg_visible });
         }
         return;
       }
@@ -418,12 +433,30 @@ async function handleMessage(msg) {
       } else {
         await sendAudio({ type: 'STOP_WEATHER' });
       }
-      // Persist weather on the scene
+      // Persist weather: on a scene row, or on the session when no scene is active
       if (msg.sceneId) {
         const { error } = await sb.from('scenes')
           .update({ weather_preset_id: msg.preset?.id ?? null })
           .eq('id', msg.sceneId);
         if (error) console.warn('[SW] weather update error:', error.message);
+      } else if (msg.campaignId) {
+        // No active overlay scene – store on session so remote players get Realtime event
+        sb.from('sessions')
+          .update({ current_weather_preset_id: msg.preset?.id ?? null, updated_at: new Date().toISOString() })
+          .eq('campaign_id', msg.campaignId)
+          .then(({ error }) => { if (error) console.warn('[SW] session weather update error:', error.message); });
+      }
+      return { ok: true };
+    }
+
+    case 'DEFAULT_BG_TOGGLE': {
+      // DM toggled background visibility while no overlay scene is active
+      broadcastToTabs({ type: 'DEFAULT_BG_CHANGED', visible: !!msg.visible });
+      if (msg.campaignId) {
+        sb.from('sessions')
+          .update({ default_bg_visible: !!msg.visible, updated_at: new Date().toISOString() })
+          .eq('campaign_id', msg.campaignId)
+          .then(({ error }) => { if (error) console.warn('[SW] default_bg_visible update error:', error.message); });
       }
       return { ok: true };
     }
