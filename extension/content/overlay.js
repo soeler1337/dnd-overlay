@@ -521,6 +521,7 @@
       combatActive = !!msg.isCombat;
       if (msg.isCombat) {
         setBackground(window._dndDefaultBackground || null, 0);
+        gifOverlay.classList.remove('active');
         safeMsg({ type: 'SCENE_AUDIO_PLAY', sceneId: null, isCombat: true });
       } else {
         const defBg = window._dndDefaultBackground || null;
@@ -560,6 +561,8 @@
     // Use scene background; fall back to default background if none set
     const bgUrl = scene.background_url || window._dndDefaultBackground || null;
     setBackground(bgUrl, opacity);
+    // Hide weather GIF during combat
+    if (isCombat) gifOverlay.classList.remove('active');
 
     // Update scene name display in DM panel
     const nameEl = document.getElementById('dnd-active-scene-name');
