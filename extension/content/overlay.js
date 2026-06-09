@@ -485,10 +485,9 @@
 
   // Safe wrapper: chrome.runtime.sendMessage throws synchronously with
   // "Extension context invalidated" when the extension is reloaded while the
-  // page stays open.  Use safeMsg() in all long-lived callbacks (intervals,
-  // MutationObserver, storage callbacks) so the error never surfaces.
+  // page stays open.  Returns a Promise so it can be used with await too.
   function safeMsg(msg) {
-    try { chrome.runtime.sendMessage(msg).catch(() => {}); } catch (_) {}
+    try { return chrome.runtime.sendMessage(msg).catch(() => null); } catch (_) { return Promise.resolve(null); }
   }
 
   chrome.runtime.onMessage.addListener((msg) => {
@@ -496,17 +495,12 @@
       combatActive = !!msg.isCombat;
       applyScene(msg.scene, msg.isCombat);
       // Play audio for the new scene (SW handles URL resolution + default fallback)
-      chrome.runtime.sendMessage({
-        type: 'SCENE_AUDIO_PLAY',
-        sceneId: msg.scene.id,
-        isCombat: !!msg.isCombat,
-      }).catch(() => {});
+      safeMsg({ type: 'SCENE_AUDIO_PLAY', sceneId: msg.scene.id, isCombat: !!msg.isCombat });
       // Fetch + apply weather for the new scene (separate WEATHER_CHANGED may follow
       // but this ensures weather is correct even if it doesn't)
       if (msg.scene.weather_preset_id) {
-        chrome.runtime.sendMessage({
-          type: 'WEATHER_PRESET_GET', presetId: msg.scene.weather_preset_id,
-        }).then(r => { if (r?.preset) applyWeather(r.preset); }).catch(() => {});
+        safeMsg({ type: 'WEATHER_PRESET_GET', presetId: msg.scene.weather_preset_id })
+          .then(r => { if (r?.preset) applyWeather(r.preset); });
       } else {
         applyWeather(null);
       }
@@ -519,19 +513,19 @@
       const vol = parseFloat(document.getElementById('dnd-player-music-vol')?.value
                           ?? document.getElementById('dnd-volume-slider')?.value ?? 0.1);
       const defAmbient = window._dndDefaultAmbient || null;
-      if (defAmbient) chrome.runtime.sendMessage({ type: 'AUDIO_PLAY', url: defAmbient, volume: vol }).catch(() => {});
-      else            chrome.runtime.sendMessage({ type: 'AUDIO_STOP' }).catch(() => {});
+      if (defAmbient) safeMsg({ type: 'AUDIO_PLAY', url: defAmbient, volume: vol });
+      else            safeMsg({ type: 'AUDIO_STOP' });
     }
     if (msg.type === 'COMBAT_CHANGED') {
       // DM toggled initiative while on a DDB scene with no overlay match
       combatActive = !!msg.isCombat;
       if (msg.isCombat) {
         setBackground(window._dndDefaultBackground || null, 0);
-        chrome.runtime.sendMessage({ type: 'SCENE_AUDIO_PLAY', sceneId: null, isCombat: true }).catch(() => {});
+        safeMsg({ type: 'SCENE_AUDIO_PLAY', sceneId: null, isCombat: true });
       } else {
         const defBg = window._dndDefaultBackground || null;
         setBackground(defBg, defBg ? 1 : 0);
-        chrome.runtime.sendMessage({ type: 'SCENE_AUDIO_PLAY', sceneId: null, isCombat: false }).catch(() => {});
+        safeMsg({ type: 'SCENE_AUDIO_PLAY', sceneId: null, isCombat: false });
       }
     }
     if (msg.type === 'WEATHER_CHANGED') applyWeather(msg.preset);
@@ -1040,7 +1034,7 @@
     volSlider.addEventListener('input', () => {
       const v = parseFloat(volSlider.value);
       volVal.textContent = Math.round(v * 100) + '%';
-      chrome.runtime.sendMessage({ type: 'AUDIO_VOLUME', volume: v });
+      safeMsg({ type: 'AUDIO_VOLUME', volume: v });
       chrome.storage.local.set({ 'dnd-music-vol': v });
     });
 
@@ -1050,7 +1044,7 @@
     weatherVolSlider.addEventListener('input', () => {
       const v = parseFloat(weatherVolSlider.value);
       weatherVolVal.textContent = Math.round(v * 100) + '%';
-      chrome.runtime.sendMessage({ type: 'WEATHER_VOLUME', volume: v });
+      safeMsg({ type: 'WEATHER_VOLUME', volume: v });
       chrome.storage.local.set({ 'dnd-weather-vol': v });
     });
 
@@ -1059,17 +1053,17 @@
       const isCombat = body.querySelector('#dnd-initiative-btn')?.dataset.active === 'true';
       const vol = parseFloat(body.querySelector('#dnd-volume-slider')?.value ?? 0.1);
       const url = resolveAudioUrl(_activeDmScene, isCombat);
-      if (url) chrome.runtime.sendMessage({ type: 'AUDIO_PLAY', url, volume: vol });
+      if (url) safeMsg({ type: 'AUDIO_PLAY', url, volume: vol });
     });
 
     body.querySelector('#dnd-music-stop').addEventListener('click', () => {
-      chrome.runtime.sendMessage({ type: 'AUDIO_STOP' });
+      safeMsg({ type: 'AUDIO_STOP' });
     });
 
     body.querySelector('#dnd-logout-btn').addEventListener('click', async () => {
-      await chrome.runtime.sendMessage({ type: 'AUTH_SIGN_OUT' });
+      await safeMsg({ type: 'AUTH_SIGN_OUT' });
       setBackground(null);
-      chrome.runtime.sendMessage({ type: 'AUDIO_STOP' });
+      safeMsg({ type: 'AUDIO_STOP' });
       renderLogin();
     });
 
@@ -1126,7 +1120,7 @@
         if (_activeDmScene) _activeDmScene.weather_preset_id = presetId || null;
         applyWeather(preset);
         const wVol = parseFloat(body.querySelector('#dnd-weather-volume-slider')?.value ?? 0.3);
-        chrome.runtime.sendMessage({ type: 'WEATHER_SET', preset, sceneId: _activeDmScene?.id || null, volume: wVol });
+        safeMsg({ type: 'WEATHER_SET', preset, sceneId: _activeDmScene?.id || null, volume: wVol });
       });
     } else if (globalWeatherSel && !weatherPresets.length) {
       globalWeatherSel.style.display = 'none';
@@ -1140,7 +1134,7 @@
       const btn = body.querySelector('#dnd-notes-save');
       btn.disabled = true;
       btn.textContent = 'Speichern...';
-      await chrome.runtime.sendMessage({
+      await safeMsg({
         type: 'NOTES_SAVE',
         campaignId: profile.campaign_id,
         content: notesEditor.value,
@@ -1151,8 +1145,8 @@
 
     // Notes refresh
     body.querySelector('#dnd-notes-refresh').addEventListener('click', async () => {
-      const r = await chrome.runtime.sendMessage({ type: 'NOTES_GET', campaignId: profile.campaign_id });
-      notesEditor.value = r.content || '';
+      const r = await safeMsg({ type: 'NOTES_GET', campaignId: profile.campaign_id });
+      notesEditor.value = r?.content || '';
     });
 
     // Wire up initiative button
@@ -1164,7 +1158,7 @@
       isCombatActive = !isCombatActive;
       combatActive   = isCombatActive; // sync global flag immediately
       updateInitiativeBtn(initBtn, isCombatActive);
-      await chrome.runtime.sendMessage({
+      await safeMsg({
         type: 'INITIATIVE_TOGGLE', active: isCombatActive, campaignId: profile.campaign_id,
         sceneId: _activeDmScene?.id ?? null,
       });
@@ -1173,8 +1167,8 @@
         applyScene(_activeDmScene, isCombatActive);
         const vol = parseFloat(body.querySelector('#dnd-volume-slider')?.value ?? 0.1);
         const url = resolveAudioUrl(_activeDmScene, isCombatActive);
-        if (url) chrome.runtime.sendMessage({ type: 'AUDIO_PLAY', url, volume: vol });
-        else     chrome.runtime.sendMessage({ type: 'AUDIO_STOP' });
+        if (url) safeMsg({ type: 'AUDIO_PLAY', url, volume: vol });
+        else     safeMsg({ type: 'AUDIO_STOP' });
         if (!isCombatActive) {
           const preset = weatherPresets.find(p => p.id === _activeDmScene.weather_preset_id) || null;
           applyWeather(preset);
@@ -1188,14 +1182,14 @@
           setBackground(window._dndDefaultBackground || null, 0); // hide bg in combat
           gifOverlay.classList.remove('active');
           const url = window._dndDefaultCombat || window._dndDefaultAmbient || null;
-          if (url) chrome.runtime.sendMessage({ type: 'AUDIO_PLAY', url, volume: vol });
-          else     chrome.runtime.sendMessage({ type: 'AUDIO_STOP' });
+          if (url) safeMsg({ type: 'AUDIO_PLAY', url, volume: vol });
+          else     safeMsg({ type: 'AUDIO_STOP' });
         } else {
           const defBg = window._dndDefaultBackground || null;
           setBackground(defBg, defBg ? 1 : 0);
           const url = window._dndDefaultAmbient || null;
-          if (url) chrome.runtime.sendMessage({ type: 'AUDIO_PLAY', url, volume: vol });
-          else     chrome.runtime.sendMessage({ type: 'AUDIO_STOP' });
+          if (url) safeMsg({ type: 'AUDIO_PLAY', url, volume: vol });
+          else     safeMsg({ type: 'AUDIO_STOP' });
         }
       }
     });
@@ -1225,7 +1219,7 @@
         // If a real scene is active, persist the opacity to DB
         if (_activeDmScene) {
           _activeDmScene.bg_opacity = newOpacity;
-          await chrome.runtime.sendMessage({
+          await safeMsg({
             type: 'SCENE_UPDATE_OPACITY',
             sceneId: _activeDmScene.id,
             opacity: newOpacity,
@@ -1350,7 +1344,7 @@
       wrap.querySelector('.dnd-scene-btn').addEventListener('click', async () => {
         document.querySelectorAll('.dnd-scene-row').forEach(r => r.classList.remove('active'));
         wrap.classList.add('active');
-        await chrome.runtime.sendMessage({ type: 'SCENE_SWITCH', sceneId: scene.id, campaignId, isCombat: combatActive });
+        await safeMsg({ type: 'SCENE_SWITCH', sceneId: scene.id, campaignId, isCombat: combatActive });
         const vol    = parseFloat(body.querySelector('#dnd-volume-slider')?.value ?? 0.1);
         const combat = combatActive;
 
@@ -1361,21 +1355,21 @@
         if (combat) {
           // Initiative läuft: nur Sound wechseln, Hintergrund + Wetter bleiben unsichtbar
           const audioUrl = resolveAudioUrl(scene, true);
-          if (audioUrl) chrome.runtime.sendMessage({ type: 'AUDIO_PLAY', url: audioUrl, volume: vol });
-          else          chrome.runtime.sendMessage({ type: 'AUDIO_STOP' });
+          if (audioUrl) safeMsg({ type: 'AUDIO_PLAY', url: audioUrl, volume: vol });
+          else          safeMsg({ type: 'AUDIO_STOP' });
           // Wetter in DB persistieren ohne visuellen Broadcast (wird beim Initiative-Ende aktiv)
           const preset = weatherPresets.find(p => p.id === scene.weather_preset_id) || null;
-          chrome.runtime.sendMessage({ type: 'WEATHER_SET', preset, sceneId: scene.id });
+          safeMsg({ type: 'WEATHER_SET', preset, sceneId: scene.id });
         } else {
           applyScene(scene, false);
           const audioUrl = resolveAudioUrl(scene, false);
-          if (audioUrl) chrome.runtime.sendMessage({ type: 'AUDIO_PLAY', url: audioUrl, volume: vol });
-          else          chrome.runtime.sendMessage({ type: 'AUDIO_STOP' });
+          if (audioUrl) safeMsg({ type: 'AUDIO_PLAY', url: audioUrl, volume: vol });
+          else          safeMsg({ type: 'AUDIO_STOP' });
           // Wetter der neuen Szene anwenden
           const preset   = weatherPresets.find(p => p.id === scene.weather_preset_id) || null;
           const wVol     = parseFloat(body.querySelector('#dnd-weather-volume-slider')?.value ?? 0.3);
           applyWeather(preset);
-          chrome.runtime.sendMessage({ type: 'WEATHER_SET', preset, sceneId: scene.id, volume: wVol });
+          safeMsg({ type: 'WEATHER_SET', preset, sceneId: scene.id, volume: wVol });
         }
       });
 
@@ -1436,7 +1430,7 @@
         sfx.volume = vol;
         sfx.play().catch(() => {});
         // Notify SW to forward to same-browser + remote players
-        chrome.runtime.sendMessage({ type: 'SOUND_PLAY', url: s.url, volume: vol, campaignId });
+        safeMsg({ type: 'SOUND_PLAY', url: s.url, volume: vol, campaignId });
         // Visual flash feedback
         btn.classList.add('playing');
         setTimeout(() => btn.classList.remove('playing'), 600);
@@ -1607,19 +1601,19 @@
     body.querySelector('#dnd-player-music-vol').addEventListener('input', function () {
       const v = parseFloat(this.value);
       body.querySelector('#dnd-player-music-vol-val').textContent = Math.round(v * 100) + '%';
-      chrome.runtime.sendMessage({ type: 'AUDIO_VOLUME', volume: v });
+      safeMsg({ type: 'AUDIO_VOLUME', volume: v });
       chrome.storage.local.set({ 'dnd-music-vol': v }); // Feature 1
     });
 
     body.querySelector('#dnd-player-weather-vol').addEventListener('input', function () {
       const v = parseFloat(this.value);
       body.querySelector('#dnd-player-weather-vol-val').textContent = Math.round(v * 100) + '%';
-      chrome.runtime.sendMessage({ type: 'WEATHER_VOLUME', volume: v });
+      safeMsg({ type: 'WEATHER_VOLUME', volume: v });
       chrome.storage.local.set({ 'dnd-weather-vol': v }); // Feature 1
     });
 
     body.querySelector('#dnd-logout-btn').addEventListener('click', async () => {
-      await chrome.runtime.sendMessage({ type: 'AUTH_SIGN_OUT' });
+      await safeMsg({ type: 'AUTH_SIGN_OUT' });
       setBackground(null);
       renderLogin();
     });
