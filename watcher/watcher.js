@@ -514,7 +514,16 @@ function startWatcher() {
         debounce[key] = setTimeout(async () => {
           const parts  = f.split(path.sep);
           const sceneD = path.join(scenesDir, parts[0]);
-          if (!fs.existsSync(sceneD) || !fs.statSync(sceneD).isDirectory()) return;
+          if (!fs.existsSync(sceneD) || !fs.statSync(sceneD).isDirectory()) {
+            // Ordner gelöscht → DB-Eintrag entfernen
+            const name = parts[0];
+            const { data } = await sb.from('scenes').select('id').eq('campaign_id', campaignId).eq('name', name).single();
+            if (data) {
+              await sb.from('scenes').delete().eq('id', data.id);
+              console.log(`[Watcher] Szene geloescht: ${name} (${gameId})`);
+            }
+            return;
+          }
           if (/^(neuer ordner|new folder)$/i.test(parts[0])) return;
           await syncScene(sceneD, campaignId, gameId).catch(e =>
             console.error('[Watcher] Sync-Fehler:', e.message));
@@ -528,7 +537,13 @@ function startWatcher() {
         debounce[key] = setTimeout(async () => {
           const parts    = f.split(path.sep);
           const weatherD = path.join(weatherDir, parts[0]);
-          if (!fs.existsSync(weatherD) || !fs.statSync(weatherD).isDirectory()) return;
+          if (!fs.existsSync(weatherD) || !fs.statSync(weatherD).isDirectory()) {
+            // Ordner gelöscht → DB-Eintrag entfernen
+            const name = parts[0];
+            await sb.from('weather_presets').delete().eq('campaign_id', campaignId).eq('name', name);
+            console.log(`[Watcher] Wetter-Preset geloescht: ${name} (${gameId})`);
+            return;
+          }
           await syncWeather(weatherD, campaignId, gameId).catch(e =>
             console.error('[Watcher] Sync-Fehler:', e.message));
         }, 800);
@@ -541,7 +556,13 @@ function startWatcher() {
         debounce[key] = setTimeout(async () => {
           const parts      = f.split(path.sep);
           const handoutDir = path.join(handoutsDir, parts[0]);
-          if (!fs.existsSync(handoutDir) || !fs.statSync(handoutDir).isDirectory()) return;
+          if (!fs.existsSync(handoutDir) || !fs.statSync(handoutDir).isDirectory()) {
+            // Ordner gelöscht → DB-Eintrag entfernen
+            const title = parts[0];
+            await sb.from('handouts').delete().eq('campaign_id', campaignId).eq('title', title);
+            console.log(`[Watcher] Handout geloescht: ${title} (${gameId})`);
+            return;
+          }
           await syncHandout(handoutDir, campaignId, gameId).catch(e =>
             console.error('[Watcher] Sync-Fehler:', e.message));
         }, 800);
@@ -566,6 +587,14 @@ function startWatcher() {
         const key = `${gameId}:sounds:${f}`;
         clearTimeout(debounce[key]);
         debounce[key] = setTimeout(async () => {
+          const fullPath = path.join(soundsDir, f);
+          if (!fs.existsSync(fullPath)) {
+            // Datei gelöscht → DB-Eintrag entfernen
+            const name = path.basename(f, path.extname(f));
+            await sb.from('sounds').delete().eq('campaign_id', campaignId).eq('name', name);
+            console.log(`[Watcher] Sound geloescht: ${name} (${gameId})`);
+            return;
+          }
           await syncSounds(gameDir, campaignId, gameId).catch(e =>
             console.error('[Watcher] Sync-Fehler Sounds:', e.message));
         }, 800);
