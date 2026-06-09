@@ -505,6 +505,18 @@
       if (defAmbient) chrome.runtime.sendMessage({ type: 'AUDIO_PLAY', url: defAmbient, volume: vol }).catch(() => {});
       else            chrome.runtime.sendMessage({ type: 'AUDIO_STOP' }).catch(() => {});
     }
+    if (msg.type === 'COMBAT_CHANGED') {
+      // DM toggled initiative while on a DDB scene with no overlay match
+      combatActive = !!msg.isCombat;
+      if (msg.isCombat) {
+        setBackground(window._dndDefaultBackground || null, 0);
+        chrome.runtime.sendMessage({ type: 'SCENE_AUDIO_PLAY', sceneId: null, isCombat: true }).catch(() => {});
+      } else {
+        const defBg = window._dndDefaultBackground || null;
+        setBackground(defBg, defBg ? 1 : 0);
+        chrome.runtime.sendMessage({ type: 'SCENE_AUDIO_PLAY', sceneId: null, isCombat: false }).catch(() => {});
+      }
+    }
     if (msg.type === 'WEATHER_CHANGED') applyWeather(msg.preset);
     if (msg.type === 'SOUND_PLAY') {
       // Players play the one-shot locally (SW already plays for DM via offscreen)
@@ -1157,6 +1169,22 @@
         } else {
           gifOverlay.classList.remove('active');
         }
+      } else {
+        // No overlay scene active – still apply opacity + default music
+        const vol = parseFloat(body.querySelector('#dnd-volume-slider')?.value ?? 0.8);
+        if (isCombatActive) {
+          setBackground(window._dndDefaultBackground || null, 0); // hide bg in combat
+          gifOverlay.classList.remove('active');
+          const url = window._dndDefaultCombat || window._dndDefaultAmbient || null;
+          if (url) chrome.runtime.sendMessage({ type: 'AUDIO_PLAY', url, volume: vol });
+          else     chrome.runtime.sendMessage({ type: 'AUDIO_STOP' });
+        } else {
+          const defBg = window._dndDefaultBackground || null;
+          setBackground(defBg, defBg ? 1 : 0);
+          const url = window._dndDefaultAmbient || null;
+          if (url) chrome.runtime.sendMessage({ type: 'AUDIO_PLAY', url, volume: vol });
+          else     chrome.runtime.sendMessage({ type: 'AUDIO_STOP' });
+        }
       }
     });
 
@@ -1391,6 +1419,11 @@
       btn.textContent = s.name;
       btn.addEventListener('click', () => {
         const vol = parseFloat(volRow.querySelector('#dnd-sfx-vol-slider').value ?? 0.9);
+        // Play immediately for the DM (user gesture – no SW roundtrip needed)
+        const sfx = new Audio(s.url);
+        sfx.volume = vol;
+        sfx.play().catch(() => {});
+        // Notify SW to forward to same-browser + remote players
         chrome.runtime.sendMessage({ type: 'SOUND_PLAY', url: s.url, volume: vol, campaignId: profile.campaign_id });
         // Visual flash feedback
         btn.classList.add('playing');

@@ -238,10 +238,30 @@ async function handleMessage(msg) {
       return { scene: data };
     }
 
-    // Player calls this on login to start the currently active scene's music
+    // Player calls this on login / COMBAT_CHANGED to start the correct music
     case 'SCENE_AUDIO_PLAY': {
-      const { data: scene } = await sb.from('scenes').select('*').eq('id', msg.sceneId).single();
-      if (scene) await playSceneAudio(scene, !!msg.isCombat);
+      if (msg.sceneId) {
+        const { data: scene } = await sb.from('scenes').select('*').eq('id', msg.sceneId).single();
+        if (scene) await playSceneAudio(scene, !!msg.isCombat);
+      } else {
+        // No active overlay scene – play default music directly
+        const campaignId = await new Promise(r =>
+          chrome.storage.local.get('dnd-campaign-id', d => r(d['dnd-campaign-id'] ?? null))
+        );
+        if (campaignId) {
+          const { data } = await sb.from('campaigns')
+            .select('default_ambient_url, default_combat_url')
+            .eq('id', campaignId).single();
+          const url = msg.isCombat
+            ? (data?.default_combat_url || data?.default_ambient_url || null)
+            : (data?.default_ambient_url || null);
+          const vol = await new Promise(r =>
+            chrome.storage.local.get('dnd-music-vol', d => r(d['dnd-music-vol'] ?? 0.8))
+          );
+          if (url) sendAudio({ type: 'PLAY_MUSIC', url, volume: vol });
+          else     sendAudio({ type: 'STOP_MUSIC' });
+        }
+      }
       return { ok: true };
     }
 
@@ -353,12 +373,28 @@ async function handleMessage(msg) {
         .update({ is_combat: msg.active, updated_at: new Date().toISOString() })
         .eq('campaign_id', msg.campaignId);
       if (error) throw error;
-      // Direct broadcast so players get the combat-state audio change immediately
       if (msg.sceneId) {
+        // Direct broadcast so players get the combat-state + audio change immediately
         const { data: scene } = await sb.from('scenes').select('*').eq('id', msg.sceneId).single();
         if (scene) {
           broadcastToTabs({ type: 'SCENE_CHANGED', scene, isCombat: !!msg.active });
           playSceneAudio(scene, !!msg.active);
+        }
+      } else {
+        // No active overlay scene – broadcast combat toggle so players adjust opacity + default music
+        broadcastToTabs({ type: 'COMBAT_CHANGED', isCombat: !!msg.active });
+        const { data: campaign } = await sb.from('campaigns')
+          .select('default_ambient_url, default_combat_url')
+          .eq('id', msg.campaignId).single();
+        if (campaign) {
+          const url = msg.active
+            ? (campaign.default_combat_url || campaign.default_ambient_url || null)
+            : (campaign.default_ambient_url || null);
+          const vol = await new Promise(r =>
+            chrome.storage.local.get('dnd-music-vol', d => r(d['dnd-music-vol'] ?? 0.8))
+          );
+          if (url) sendAudio({ type: 'PLAY_MUSIC', url, volume: vol });
+          else     sendAudio({ type: 'STOP_MUSIC' });
         }
       }
       return { ok: true };
@@ -406,10 +442,9 @@ async function handleMessage(msg) {
     }
 
     case 'SOUND_PLAY': {
-      // Broadcast to all local tabs (same browser / incognito)
+      // Broadcast to same-browser tabs (incognito players).
+      // Note: DM plays directly from the click handler – no sendAudio needed here.
       broadcastToTabs({ type: 'SOUND_PLAY', url: msg.url, volume: msg.volume ?? 0.9 });
-      // Play in offscreen for the DM
-      await sendAudio({ type: 'PLAY_SOUND', url: msg.url, volume: msg.volume ?? 0.9 });
       // Persist to sessions so remote players receive it via Realtime (requires migration 004)
       if (msg.campaignId) {
         sb.from('sessions')
