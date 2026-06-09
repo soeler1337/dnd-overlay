@@ -1424,7 +1424,7 @@
         sfx.volume = vol;
         sfx.play().catch(() => {});
         // Notify SW to forward to same-browser + remote players
-        chrome.runtime.sendMessage({ type: 'SOUND_PLAY', url: s.url, volume: vol, campaignId: profile.campaign_id });
+        chrome.runtime.sendMessage({ type: 'SOUND_PLAY', url: s.url, volume: vol, campaignId });
         // Visual flash feedback
         btn.classList.add('playing');
         setTimeout(() => btn.classList.remove('playing'), 600);
