@@ -493,6 +493,15 @@
         sceneId: msg.scene.id,
         isCombat: !!msg.isCombat,
       }).catch(() => {});
+      // Fetch + apply weather for the new scene (separate WEATHER_CHANGED may follow
+      // but this ensures weather is correct even if it doesn't)
+      if (msg.scene.weather_preset_id) {
+        chrome.runtime.sendMessage({
+          type: 'WEATHER_PRESET_GET', presetId: msg.scene.weather_preset_id,
+        }).then(r => { if (r?.preset) applyWeather(r.preset); }).catch(() => {});
+      } else {
+        applyWeather(null);
+      }
     }
     if (msg.type === 'SCENE_CLEARED') {
       // DM switched to a DDB scene with no overlay match → show default background
@@ -1552,6 +1561,20 @@
           campaignId: profile.campaign_id,
           isCombat: session.is_combat ?? false,
         }).catch(() => {});
+        // Apply weather preset of the active scene on join
+        if (sceneResp.scene.weather_preset_id) {
+          chrome.runtime.sendMessage({
+            type: 'WEATHER_PRESET_GET', presetId: sceneResp.scene.weather_preset_id,
+          }).then(r => {
+            if (r?.preset) {
+              applyWeather(r.preset);
+              const wVol = parseFloat(
+                body.querySelector('#dnd-player-weather-vol')?.value ?? 0.3
+              );
+              chrome.runtime.sendMessage({ type: 'WEATHER_PLAY', url: r.preset.sound_url || null, volume: wVol }).catch(() => {});
+            }
+          }).catch(() => {});
+        }
       }
     }
 

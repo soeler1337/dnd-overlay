@@ -100,6 +100,14 @@ function subscribeToSession(sessionId, campaignId) {
         if (scene) {
           broadcastToTabs({ type: 'SCENE_CHANGED', scene, isCombat: activeCombat });
           playSceneAudio(scene, activeCombat);
+          // Also sync weather for the new scene so players don't see stale weather
+          if (scene.weather_preset_id) {
+            const { data: preset } = await sb
+              .from('weather_presets').select('*').eq('id', scene.weather_preset_id).single();
+            broadcastToTabs({ type: 'WEATHER_CHANGED', preset: preset || null });
+          } else {
+            broadcastToTabs({ type: 'WEATHER_CHANGED', preset: null });
+          }
         }
       }
     })
@@ -346,6 +354,12 @@ async function handleMessage(msg) {
       if (msg.url) await sendAudio({ type: 'PLAY_WEATHER', url: msg.url, volume: msg.volume ?? 0.3 });
       else         await sendAudio({ type: 'STOP_WEATHER' });
       return { ok: true };
+
+    case 'WEATHER_PRESET_GET': {
+      if (!msg.presetId) return { preset: null };
+      const { data } = await sb.from('weather_presets').select('*').eq('id', msg.presetId).single();
+      return { preset: data || null };
+    }
 
     case 'WEATHER_PRESETS_LIST': {
       const { data, error } = await sb
