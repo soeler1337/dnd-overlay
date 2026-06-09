@@ -313,6 +313,87 @@ async function syncDefault(gameDir, campaignId, gameId) {
 }
 
 // -------------------------------------------------------------------------
+// Cleanup: remove DB rows whose folders no longer exist on disk
+// -------------------------------------------------------------------------
+async function cleanupOrphans(gameDir, campaignId, gameId) {
+  const scenesDir   = path.join(gameDir, 'scenes');
+  const weatherDir  = path.join(gameDir, 'weather');
+  const handoutsDir = path.join(gameDir, 'handouts');
+  const soundsDir   = path.join(gameDir, 'sounds');
+
+  // --- Scenes ---
+  const localSceneNames = fs.existsSync(scenesDir)
+    ? fs.readdirSync(scenesDir)
+        .filter(e => fs.statSync(path.join(scenesDir, e)).isDirectory())
+        .map(e => e)
+    : [];
+
+  const { data: dbScenes } = await sb.from('scenes')
+    .select('id, name').eq('campaign_id', campaignId);
+
+  for (const row of (dbScenes || [])) {
+    const stillExists = localSceneNames.some(
+      n => n.toLowerCase() === row.name.toLowerCase()
+    );
+    if (!stillExists) {
+      await sb.from('scenes').delete().eq('id', row.id);
+      console.log(`[Watcher] Szene geloescht (Ordner weg): ${row.name} (${gameId})`);
+    }
+  }
+
+  // --- Weather presets ---
+  const localWeatherNames = fs.existsSync(weatherDir)
+    ? fs.readdirSync(weatherDir)
+        .filter(e => fs.statSync(path.join(weatherDir, e)).isDirectory())
+        .map(e => e)
+    : [];
+
+  const { data: dbWeather } = await sb.from('weather_presets')
+    .select('id, name').eq('campaign_id', campaignId);
+
+  for (const row of (dbWeather || [])) {
+    if (!localWeatherNames.includes(row.name)) {
+      await sb.from('weather_presets').delete().eq('id', row.id);
+      console.log(`[Watcher] Wetter-Preset geloescht (Ordner weg): ${row.name} (${gameId})`);
+    }
+  }
+
+  // --- Handouts ---
+  const localHandoutNames = fs.existsSync(handoutsDir)
+    ? fs.readdirSync(handoutsDir)
+        .filter(e => fs.statSync(path.join(handoutsDir, e)).isDirectory())
+        .map(e => e)
+    : [];
+
+  const { data: dbHandouts } = await sb.from('handouts')
+    .select('id, title').eq('campaign_id', campaignId);
+
+  for (const row of (dbHandouts || [])) {
+    if (!localHandoutNames.includes(row.title)) {
+      await sb.from('handouts').delete().eq('id', row.id);
+      console.log(`[Watcher] Handout geloescht (Ordner weg): ${row.title} (${gameId})`);
+    }
+  }
+
+  // --- Sounds ---
+  const localSoundNames = fs.existsSync(soundsDir)
+    ? fs.readdirSync(soundsDir)
+        .filter(f => isAudio(f))
+        .map(f => path.basename(f, path.extname(f)))
+    : [];
+
+  const { data: dbSounds } = await sb.from('sounds')
+    .select('id, name').eq('campaign_id', campaignId);
+
+  for (const row of (dbSounds || [])) {
+    if (!localSoundNames.includes(row.name)) {
+      await sb.from('sounds').delete().eq('id', row.id);
+      console.log(`[Watcher] Sound geloescht (Datei weg): ${row.name} (${gameId})`);
+    }
+  }
+}
+
+// -------------------------------------------------------------------------
 // Full sync for one game-id folder
 // -------------------------------------------------------------------------
 async function syncGameFolder(gameDir) {
@@ -359,6 +440,10 @@ async function syncGameFolder(gameDir) {
         console.error('[Watcher] Fehler Handout:', e.message));
     }
   }
+
+  // Delete DB rows for folders/files that no longer exist on disk
+  await cleanupOrphans(gameDir, campaignId, gameId).catch(e =>
+    console.error('[Watcher] Fehler Cleanup:', e.message));
 }
 
 // -------------------------------------------------------------------------

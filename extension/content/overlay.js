@@ -969,13 +969,13 @@
           <button class="dnd-btn dnd-music-btn" id="dnd-music-play" title="Play">&#9654;</button>
           <button class="dnd-btn dnd-music-btn" id="dnd-music-stop" title="Stop">&#9646;&#9646;</button>
           <input type="range" id="dnd-volume-slider" class="dnd-opacity-slider"
-            min="0" max="1" step="0.05" value="0.8" />
+            min="0" max="1" step="0.01" value="0.8" />
           <span class="dnd-opacity-val" id="dnd-volume-val">80%</span>
         </div>
         <div class="dnd-music-row" style="margin-top:4px">
           <span class="dnd-opacity-label" style="white-space:nowrap">&#127783; Wetter</span>
           <input type="range" id="dnd-weather-volume-slider" class="dnd-opacity-slider"
-            min="0" max="1" step="0.05" value="0.3" />
+            min="0" max="1" step="0.01" value="0.3" />
           <span class="dnd-opacity-val" id="dnd-weather-volume-val">30%</span>
         </div>
         <div class="dnd-music-row" style="margin-top:6px">
@@ -1368,7 +1368,7 @@
     volRow.style.marginBottom = '6px';
     volRow.innerHTML = `
       <span class="dnd-opacity-label">&#128266; Lautst.</span>
-      <input type="range" class="dnd-opacity-slider" id="dnd-sfx-vol-slider" min="0" max="1" step="0.05" value="0.9" />
+      <input type="range" class="dnd-opacity-slider" id="dnd-sfx-vol-slider" min="0" max="1" step="0.01" value="0.9" />
       <span class="dnd-opacity-val" id="dnd-sfx-vol-val">90%</span>
     `;
     container.insertBefore(volRow, grid);
@@ -1391,7 +1391,7 @@
       btn.textContent = s.name;
       btn.addEventListener('click', () => {
         const vol = parseFloat(volRow.querySelector('#dnd-sfx-vol-slider').value ?? 0.9);
-        chrome.runtime.sendMessage({ type: 'SOUND_PLAY', url: s.url, volume: vol });
+        chrome.runtime.sendMessage({ type: 'SOUND_PLAY', url: s.url, volume: vol, campaignId: profile.campaign_id });
         // Visual flash feedback
         btn.classList.add('playing');
         setTimeout(() => btn.classList.remove('playing'), 600);
@@ -1458,13 +1458,13 @@
         <div class="dnd-music-row">
           <span class="dnd-opacity-label">&#9835; Musik</span>
           <input type="range" id="dnd-player-music-vol" class="dnd-opacity-slider"
-            min="0" max="1" step="0.05" value="0.8" />
+            min="0" max="1" step="0.01" value="0.8" />
           <span class="dnd-opacity-val" id="dnd-player-music-vol-val">80%</span>
         </div>
         <div class="dnd-music-row" style="margin-top:4px">
           <span class="dnd-opacity-label">&#127783; Wetter</span>
           <input type="range" id="dnd-player-weather-vol" class="dnd-opacity-slider"
-            min="0" max="1" step="0.05" value="0.3" />
+            min="0" max="1" step="0.01" value="0.3" />
           <span class="dnd-opacity-val" id="dnd-player-weather-vol-val">30%</span>
         </div>
       </div>
@@ -1534,11 +1534,14 @@
     const notesRendered = body.querySelector('#dnd-notes-rendered');
     if (notesRendered) notesRendered.innerHTML = renderMarkdown(notesResp.content || '');
 
-    // Refresh notes
-    body.querySelector('#dnd-player-notes-refresh').addEventListener('click', async () => {
-      const r = await chrome.runtime.sendMessage({ type: 'NOTES_GET', campaignId: profile.campaign_id });
-      if (notesRendered) notesRendered.innerHTML = renderMarkdown(r.content || '');
-    });
+    // Refresh notes (manual button)
+    async function refreshNotes() {
+      const r = await chrome.runtime.sendMessage({ type: 'NOTES_GET', campaignId: profile.campaign_id }).catch(() => null);
+      if (r && notesRendered) notesRendered.innerHTML = renderMarkdown(r.content || '');
+    }
+    body.querySelector('#dnd-player-notes-refresh').addEventListener('click', refreshNotes);
+    // Auto-refresh notes every 30 s as Realtime fallback
+    const _notesInterval = setInterval(() => refreshNotes().catch(() => {}), 30000);
 
     body.querySelector('#dnd-player-music-vol').addEventListener('input', function () {
       const v = parseFloat(this.value);

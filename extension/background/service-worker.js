@@ -58,12 +58,14 @@ function subscribeToSession(sessionId, campaignId) {
     realtimeChannel = null;
   }
 
-  // Track active scene so scene updates can check if they need broadcasting
+  // Closure state – kept up-to-date by the sessions Realtime callback
   let activeSceneId = null;
+  let activeCombat  = false;
+  let lastSfxAt     = null;
 
   realtimeChannel = sb
     .channel('session-' + sessionId)
-    // Session change = DM switched scene
+    // Session change = DM switched scene / toggled combat / played SFX
     .on('postgres_changes', {
       event:  'UPDATE',
       schema: 'public',
@@ -72,17 +74,23 @@ function subscribeToSession(sessionId, campaignId) {
     }, async (payload) => {
       const wasActive    = activeSceneId;
       activeSceneId      = payload.new.active_scene_id;
-      const isCombat     = payload.new.is_combat;
+      activeCombat       = !!payload.new.is_combat;
+
+      // Stream toggle – no scene required
+      if (payload.old?.stream_active !== payload.new.stream_active) {
+        broadcastToTabs({ type: 'STREAM_CHANGED', active: !!payload.new.stream_active });
+      }
+
+      // Soundboard sync – remote players hear SFX via sessions row change
+      if (payload.new.last_sfx_url && payload.new.last_sfx_at !== lastSfxAt) {
+        lastSfxAt = payload.new.last_sfx_at;
+        broadcastToTabs({ type: 'SOUND_PLAY', url: payload.new.last_sfx_url, volume: 0.9 });
+      }
 
       if (!activeSceneId) return;
 
       // Reload scene if scene switched OR combat state changed
-      // Broadcast stream_active changes immediately
-      if (payload.old.stream_active !== payload.new.stream_active) {
-        broadcastToTabs({ type: 'STREAM_CHANGED', active: !!payload.new.stream_active });
-      }
-
-      if (activeSceneId !== wasActive || payload.old.is_combat !== isCombat) {
+      if (activeSceneId !== wasActive || payload.old?.is_combat !== payload.new.is_combat) {
         const { data: scene } = await sb
           .from('scenes')
           .select('*')
@@ -90,20 +98,29 @@ function subscribeToSession(sessionId, campaignId) {
           .single();
 
         if (scene) {
-          broadcastToTabs({ type: 'SCENE_CHANGED', scene, isCombat: !!isCombat });
-          playSceneAudio(scene, !!isCombat);
+          broadcastToTabs({ type: 'SCENE_CHANGED', scene, isCombat: activeCombat });
+          playSceneAudio(scene, activeCombat);
         }
       }
     })
-    // Scene row updated = DM changed opacity (or watcher updated background)
+    // Scene row updated = DM changed opacity / weather / watcher re-uploaded an asset
     .on('postgres_changes', {
       event:  'UPDATE',
       schema: 'public',
       table:  'scenes',
       filter: 'campaign_id=eq.' + campaignId,
-    }, (payload) => {
-      if (payload.new.id === activeSceneId) {
-        broadcastToTabs({ type: 'SCENE_CHANGED', scene: payload.new });
+    }, async (payload) => {
+      if (payload.new.id !== activeSceneId) return;
+      // Forward scene change with correct combat state so player opacity stays right
+      broadcastToTabs({ type: 'SCENE_CHANGED', scene: payload.new, isCombat: !!activeCombat });
+      // Also sync weather preset so remote players see / hear weather changes
+      const presetId = payload.new.weather_preset_id;
+      if (presetId) {
+        const { data: preset } = await sb
+          .from('weather_presets').select('*').eq('id', presetId).single();
+        broadcastToTabs({ type: 'WEATHER_CHANGED', preset: preset || null });
+      } else {
+        broadcastToTabs({ type: 'WEATHER_CHANGED', preset: null });
       }
     })
     .on('postgres_changes', {
@@ -125,9 +142,17 @@ function subscribeToSession(sessionId, campaignId) {
       }
     });
 
-  // Load current active scene on startup
-  sb.from('sessions').select('active_scene_id').eq('id', sessionId).single()
-    .then(({ data }) => { if (data) activeSceneId = data.active_scene_id; });
+  // Initialise closure state from DB so first Realtime event can diff correctly
+  sb.from('sessions')
+    .select('active_scene_id, is_combat, last_sfx_at')
+    .eq('id', sessionId).single()
+    .then(({ data }) => {
+      if (data) {
+        activeSceneId = data.active_scene_id;
+        activeCombat  = !!data.is_combat;
+        lastSfxAt     = data.last_sfx_at;
+      }
+    });
 }
 
 // -------------------------------------------------------------------------
@@ -159,6 +184,8 @@ async function handleMessage(msg) {
       const campaignId = await resolveCampaignId(msg.gameId, profile);
       if (campaignId) {
         profile.campaign_id = campaignId;
+        // Persist so tryResubscribe works after SW is killed and restarted
+        chrome.storage.local.set({ 'dnd-campaign-id': campaignId });
         const session = await fetchSession(campaignId);
         if (session) subscribeToSession(session.id, campaignId);
       }
@@ -174,6 +201,8 @@ async function handleMessage(msg) {
       const campaignId = await resolveCampaignId(msg.gameId, profile);
       if (campaignId) {
         profile.campaign_id = campaignId;
+        // Persist so tryResubscribe works after SW is killed and restarted
+        chrome.storage.local.set({ 'dnd-campaign-id': campaignId });
         const session = await fetchSession(campaignId);
         if (session) subscribeToSession(session.id, campaignId);
       }
@@ -377,10 +406,17 @@ async function handleMessage(msg) {
     }
 
     case 'SOUND_PLAY': {
-      // Broadcast to all tabs so everyone hears it
+      // Broadcast to all local tabs (same browser / incognito)
       broadcastToTabs({ type: 'SOUND_PLAY', url: msg.url, volume: msg.volume ?? 0.9 });
-      // Also play in offscreen for the DM's tab
+      // Play in offscreen for the DM
       await sendAudio({ type: 'PLAY_SOUND', url: msg.url, volume: msg.volume ?? 0.9 });
+      // Persist to sessions so remote players receive it via Realtime (requires migration 004)
+      if (msg.campaignId) {
+        sb.from('sessions')
+          .update({ last_sfx_url: msg.url, last_sfx_at: new Date().toISOString() })
+          .eq('campaign_id', msg.campaignId)
+          .then(({ error }) => { if (error) console.warn('[SW] SFX sync error:', error.message); });
+      }
       return { ok: true };
     }
 
@@ -502,11 +538,20 @@ async function tryResubscribe() {
     const { data } = await sb.auth.getSession();
     if (!data?.session) return;
     const profile = await fetchProfile(data.session.user.id);
-    if (!profile?.campaign_id) return;
-    const session = await fetchSession(profile.campaign_id);
+    // profile.campaign_id may be null for players who joined via game_id
+    // (resolveCampaignId only sets it in memory, not in DB).
+    // Fall back to the value we persisted in chrome.storage.local on login.
+    let campaignId = profile?.campaign_id;
+    if (!campaignId) {
+      campaignId = await new Promise(r =>
+        chrome.storage.local.get('dnd-campaign-id', d => r(d['dnd-campaign-id'] ?? null))
+      );
+    }
+    if (!campaignId) return;
+    const session = await fetchSession(campaignId);
     if (session) {
       console.log('[SW] Re-subscribing after SW wake-up');
-      subscribeToSession(session.id, profile.campaign_id);
+      subscribeToSession(session.id, campaignId);
     }
   } catch (e) {
     console.warn('[SW] tryResubscribe failed:', e.message);

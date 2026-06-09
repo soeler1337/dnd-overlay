@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "DnD Overlay",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "DM-controlled overlay for DnD Beyond game sessions.",
 
   "permissions": [
