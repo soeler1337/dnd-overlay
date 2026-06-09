@@ -18,6 +18,10 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 // Active Realtime channel - only one at a time per SW instance.
 let realtimeChannel = null;
 
+// Last weather URL played – used to deduplicate: WEATHER_SET plays immediately,
+// the subsequent Realtime scenes-callback skips if the URL hasn't changed.
+let lastWeatherUrl = null;
+
 // -------------------------------------------------------------------------
 // Offscreen Document helpers (audio)
 // -------------------------------------------------------------------------
@@ -42,6 +46,18 @@ async function sendAudio(msg) {
 // -------------------------------------------------------------------------
 // Broadcast to all DDB game tabs
 // -------------------------------------------------------------------------
+// Play (or stop) weather audio and track lastWeatherUrl for dedup.
+// Pass force=true to always play even if URL hasn't changed (e.g. scene switch).
+async function playWeatherAudio(soundUrl, force = false) {
+  if (!force && soundUrl === lastWeatherUrl) return;
+  lastWeatherUrl = soundUrl ?? null;
+  const vol = await new Promise(r =>
+    chrome.storage.local.get('dnd-weather-vol', d => r(d['dnd-weather-vol'] ?? 0.3))
+  );
+  if (soundUrl) sendAudio({ type: 'PLAY_WEATHER', url: soundUrl, volume: vol });
+  else          sendAudio({ type: 'STOP_WEATHER' });
+}
+
 async function broadcastToTabs(msg) {
   const tabs = await chrome.tabs.query({ url: 'https://www.dndbeyond.com/*' });
   for (const tab of tabs) {
@@ -87,6 +103,21 @@ function subscribeToSession(sessionId, campaignId) {
         broadcastToTabs({ type: 'SOUND_PLAY', url: payload.new.last_sfx_url, volume: 0.9 });
       }
 
+      // Scene was cleared (DM switched to a DDB scene with no overlay match)
+      if (!activeSceneId && wasActive) {
+        broadcastToTabs({ type: 'SCENE_CLEARED' });
+        broadcastToTabs({ type: 'WEATHER_CHANGED', preset: null });
+        playWeatherAudio(null, true);
+        // Play default ambient music if campaign has one
+        const { data: campaign } = await sb
+          .from('campaigns').select('default_ambient_url').eq('id', campaignId).single();
+        const vol = await new Promise(r =>
+          chrome.storage.local.get('dnd-music-vol', d => r(d['dnd-music-vol'] ?? 0.3))
+        );
+        if (campaign?.default_ambient_url) sendAudio({ type: 'PLAY_MUSIC', url: campaign.default_ambient_url, volume: vol });
+        else                               sendAudio({ type: 'STOP_MUSIC' });
+        return;
+      }
       if (!activeSceneId) return;
 
       // Reload scene if scene switched OR combat state changed
@@ -105,8 +136,10 @@ function subscribeToSession(sessionId, campaignId) {
             const { data: preset } = await sb
               .from('weather_presets').select('*').eq('id', scene.weather_preset_id).single();
             broadcastToTabs({ type: 'WEATHER_CHANGED', preset: preset || null });
+            playWeatherAudio(preset?.sound_url || null, true); // force=true on scene switch
           } else {
             broadcastToTabs({ type: 'WEATHER_CHANGED', preset: null });
+            playWeatherAudio(null, true);
           }
         }
       }
@@ -127,8 +160,10 @@ function subscribeToSession(sessionId, campaignId) {
         const { data: preset } = await sb
           .from('weather_presets').select('*').eq('id', presetId).single();
         broadcastToTabs({ type: 'WEATHER_CHANGED', preset: preset || null });
+        await playWeatherAudio(preset?.sound_url || null); // dedup: skip if URL unchanged
       } else {
         broadcastToTabs({ type: 'WEATHER_CHANGED', preset: null });
+        await playWeatherAudio(null);
       }
     })
     .on('postgres_changes', {
@@ -293,8 +328,23 @@ async function handleMessage(msg) {
 
     case 'SCENE_CLEAR': {
       // DM switched to a DDB scene with no overlay match and no Default scene.
-      // Broadcast to all local tabs so players also show the default background.
+      // Broadcast to local tabs AND update the DB so remote players get the Realtime event.
       broadcastToTabs({ type: 'SCENE_CLEARED' });
+      broadcastToTabs({ type: 'WEATHER_CHANGED', preset: null });
+      playWeatherAudio(null, true);
+      if (msg.campaignId) {
+        await sb.from('sessions')
+          .update({ active_scene_id: null, updated_at: new Date().toISOString() })
+          .eq('campaign_id', msg.campaignId);
+        // Play default music locally too
+        const { data: campaign } = await sb
+          .from('campaigns').select('default_ambient_url').eq('id', msg.campaignId).single();
+        const vol = await new Promise(r =>
+          chrome.storage.local.get('dnd-music-vol', d => r(d['dnd-music-vol'] ?? 0.3))
+        );
+        if (campaign?.default_ambient_url) sendAudio({ type: 'PLAY_MUSIC', url: campaign.default_ambient_url, volume: vol });
+        else                               sendAudio({ type: 'STOP_MUSIC' });
+      }
       return { ok: true };
     }
 
@@ -329,10 +379,12 @@ async function handleMessage(msg) {
       return { ok: true };
 
     case 'WEATHER_SET': {
-      // Broadcast to all tabs + play/stop weather sound
+      // Broadcast to all tabs + play/stop weather sound immediately (force=true so DM hears it right away;
+      // the subsequent Realtime scenes-callback will see same URL and skip duplicate playback).
       broadcastToTabs({ type: 'WEATHER_CHANGED', preset: msg.preset });
+      lastWeatherUrl = msg.preset?.sound_url || null; // set before playWeatherAudio so Realtime dedup works
       if (msg.preset?.sound_url) {
-        await sendAudio({ type: 'PLAY_WEATHER', url: msg.preset.sound_url, volume: msg.volume ?? 0.4 });
+        await sendAudio({ type: 'PLAY_WEATHER', url: msg.preset.sound_url, volume: msg.volume ?? 0.3 });
       } else {
         await sendAudio({ type: 'STOP_WEATHER' });
       }

@@ -583,14 +583,9 @@
     } else {
       gifOverlay.classList.remove('active');
     }
-    // Play weather sound locally on player side (DM's WEATHER_SET only plays on DM machine)
-    if (!window._dndIsDm) {
-      chrome.storage.local.get('dnd-weather-vol', (r) => {
-        const vol = r['dnd-weather-vol'] ?? 0.3;
-        safeMsg({ type: 'WEATHER_PLAY', url: preset?.sound_url || null, volume: vol });
-      });
-    }
   }
+  // Note: weather *audio* is handled by the Service Worker (playWeatherAudio) so it
+  // works reliably for both local and remote players via Realtime. No sendMessage here.
 
 
   // -------------------------------------------------------------------------
@@ -1560,17 +1555,15 @@
         }).catch(() => {});
         // Apply weather preset of the active scene on join
         if (sceneResp.scene.weather_preset_id) {
-          chrome.runtime.sendMessage({
-            type: 'WEATHER_PRESET_GET', presetId: sceneResp.scene.weather_preset_id,
-          }).then(r => {
-            if (r?.preset) {
-              applyWeather(r.preset);
-              const wVol = parseFloat(
-                body.querySelector('#dnd-player-weather-vol')?.value ?? 0.3
-              );
-              chrome.runtime.sendMessage({ type: 'WEATHER_PLAY', url: r.preset.sound_url || null, volume: wVol }).catch(() => {});
-            }
-          }).catch(() => {});
+          safeMsg({ type: 'WEATHER_PRESET_GET', presetId: sceneResp.scene.weather_preset_id })
+            .then(r => {
+              if (r?.preset) {
+                applyWeather(r.preset);
+                // On login no Realtime event fires, so explicitly start weather audio
+                const wVol = parseFloat(body.querySelector('#dnd-player-weather-vol')?.value ?? 0.3);
+                safeMsg({ type: 'WEATHER_PLAY', url: r.preset.sound_url || null, volume: wVol });
+              }
+            });
         }
       }
     }
