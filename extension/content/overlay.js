@@ -511,7 +511,7 @@
       const defBg = window._dndDefaultBackground || null;
       setBackground(defBg, defBg ? 1 : 0);
       const vol = parseFloat(document.getElementById('dnd-player-music-vol')?.value
-                          ?? document.getElementById('dnd-volume-slider')?.value ?? 0.1);
+                          ?? document.getElementById('dnd-volume-slider')?.value ?? 0.3);
       const defAmbient = window._dndDefaultAmbient || null;
       if (defAmbient) safeMsg({ type: 'AUDIO_PLAY', url: defAmbient, volume: vol });
       else            safeMsg({ type: 'AUDIO_STOP' });
@@ -771,7 +771,7 @@
         console.log('[DnD] No scene match for:', name,
           '| fallback:', fallback?.name ?? 'none',
           '| _dndDefaultBackground:', window._dndDefaultBackground ?? 'null');
-        const vol = parseFloat(document.getElementById('dnd-volume-slider')?.value ?? 0.1);
+        const vol = parseFloat(document.getElementById('dnd-volume-slider')?.value ?? 0.3);
         if (fallback) {
           if (_activeDmScene?.id !== fallback.id) {
             if (!fallback.bg_opacity && window._dndDefaultBackground) fallback.bg_opacity = 1;
@@ -811,7 +811,7 @@
       applyScene(match, combatActive);
 
       // Also trigger audio – the RT subscription only plays on player tabs, not DM tab
-      const vol = parseFloat(document.getElementById('dnd-volume-slider')?.value ?? 0.1);
+      const vol = parseFloat(document.getElementById('dnd-volume-slider')?.value ?? 0.3);
       const audioUrl = resolveAudioUrl(match, combatActive);
       if (audioUrl) safeMsg({ type: 'AUDIO_PLAY', url: audioUrl, volume: vol });
       else          safeMsg({ type: 'AUDIO_STOP' });
@@ -987,8 +987,8 @@
           <button class="dnd-btn dnd-music-btn" id="dnd-music-play" title="Play">&#9654;</button>
           <button class="dnd-btn dnd-music-btn" id="dnd-music-stop" title="Stop">&#9646;&#9646;</button>
           <input type="range" id="dnd-volume-slider" class="dnd-opacity-slider"
-            min="0" max="1" step="0.01" value="0.1" />
-          <span class="dnd-opacity-val" id="dnd-volume-val">10%</span>
+            min="0" max="1" step="0.01" value="0.3" />
+          <span class="dnd-opacity-val" id="dnd-volume-val">30%</span>
         </div>
         <div class="dnd-music-row" style="margin-top:4px">
           <span class="dnd-opacity-label" style="white-space:nowrap">&#127783; Wetter</span>
@@ -1011,7 +1011,7 @@
 
     // --- Feature 1: Restore saved volumes ---
     chrome.storage.local.get(['dnd-music-vol', 'dnd-weather-vol'], (r) => {
-      const musicVol   = r['dnd-music-vol']   ?? 0.1;
+      const musicVol   = r['dnd-music-vol']   ?? 0.3;
       const weatherVol = r['dnd-weather-vol'] ?? 0.3;
 
       const volSlider = body.querySelector('#dnd-volume-slider');
@@ -1051,7 +1051,7 @@
     body.querySelector('#dnd-music-play').addEventListener('click', () => {
       if (!_activeDmScene) return;
       const isCombat = body.querySelector('#dnd-initiative-btn')?.dataset.active === 'true';
-      const vol = parseFloat(body.querySelector('#dnd-volume-slider')?.value ?? 0.1);
+      const vol = parseFloat(body.querySelector('#dnd-volume-slider')?.value ?? 0.3);
       const url = resolveAudioUrl(_activeDmScene, isCombat);
       if (url) safeMsg({ type: 'AUDIO_PLAY', url, volume: vol });
     });
@@ -1165,7 +1165,7 @@
       // Apply locally using tracked active scene
       if (_activeDmScene) {
         applyScene(_activeDmScene, isCombatActive);
-        const vol = parseFloat(body.querySelector('#dnd-volume-slider')?.value ?? 0.1);
+        const vol = parseFloat(body.querySelector('#dnd-volume-slider')?.value ?? 0.3);
         const url = resolveAudioUrl(_activeDmScene, isCombatActive);
         if (url) safeMsg({ type: 'AUDIO_PLAY', url, volume: vol });
         else     safeMsg({ type: 'AUDIO_STOP' });
@@ -1177,7 +1177,7 @@
         }
       } else {
         // No overlay scene active – still apply opacity + default music
-        const vol = parseFloat(body.querySelector('#dnd-volume-slider')?.value ?? 0.1);
+        const vol = parseFloat(body.querySelector('#dnd-volume-slider')?.value ?? 0.3);
         if (isCombatActive) {
           setBackground(window._dndDefaultBackground || null, 0); // hide bg in combat
           gifOverlay.classList.remove('active');
@@ -1345,7 +1345,7 @@
         document.querySelectorAll('.dnd-scene-row').forEach(r => r.classList.remove('active'));
         wrap.classList.add('active');
         await safeMsg({ type: 'SCENE_SWITCH', sceneId: scene.id, campaignId, isCombat: combatActive });
-        const vol    = parseFloat(body.querySelector('#dnd-volume-slider')?.value ?? 0.1);
+        const vol    = parseFloat(body.querySelector('#dnd-volume-slider')?.value ?? 0.3);
         const combat = combatActive;
 
         // Sync global weather dropdown to new scene's preset
@@ -1497,7 +1497,7 @@
         <div class="dnd-music-row">
           <span class="dnd-opacity-label">&#9835; Musik</span>
           <input type="range" id="dnd-player-music-vol" class="dnd-opacity-slider"
-            min="0" max="1" step="0.01" value="0.1" />
+            min="0" max="1" step="0.01" value="0.3" />
           <span class="dnd-opacity-val" id="dnd-player-music-vol-val">10%</span>
         </div>
         <div class="dnd-music-row" style="margin-top:4px">
@@ -1513,7 +1513,7 @@
 
     // Restore saved volumes for player
     chrome.storage.local.get(['dnd-music-vol', 'dnd-weather-vol'], (r) => {
-      const musicVol   = r['dnd-music-vol']   ?? 0.1;
+      const musicVol   = r['dnd-music-vol']   ?? 0.3;
       const weatherVol = r['dnd-weather-vol'] ?? 0.3;
 
       const musicSlider = body.querySelector('#dnd-player-music-vol');

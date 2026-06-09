@@ -264,7 +264,7 @@ async function handleMessage(msg) {
             ? (data?.default_combat_url || data?.default_ambient_url || null)
             : (data?.default_ambient_url || null);
           const vol = await new Promise(r =>
-            chrome.storage.local.get('dnd-music-vol', d => r(d['dnd-music-vol'] ?? 0.1))
+            chrome.storage.local.get('dnd-music-vol', d => r(d['dnd-music-vol'] ?? 0.3))
           );
           if (url) sendAudio({ type: 'PLAY_MUSIC', url, volume: vol });
           else     sendAudio({ type: 'STOP_MUSIC' });
@@ -317,7 +317,7 @@ async function handleMessage(msg) {
 
     case 'AUDIO_PLAY':
       if (!msg.url) return { ok: true };
-      await sendAudio({ type: 'PLAY_MUSIC', url: msg.url, volume: msg.volume ?? 0.1 });
+      await sendAudio({ type: 'PLAY_MUSIC', url: msg.url, volume: msg.volume ?? 0.3 });
       return { ok: true };
 
     case 'AUDIO_STOP':
@@ -405,7 +405,7 @@ async function handleMessage(msg) {
             ? (campaign.default_combat_url || campaign.default_ambient_url || null)
             : (campaign.default_ambient_url || null);
           const vol = await new Promise(r =>
-            chrome.storage.local.get('dnd-music-vol', d => r(d['dnd-music-vol'] ?? 0.1))
+            chrome.storage.local.get('dnd-music-vol', d => r(d['dnd-music-vol'] ?? 0.3))
           );
           if (url) sendAudio({ type: 'PLAY_MUSIC', url, volume: vol });
           else     sendAudio({ type: 'STOP_MUSIC' });
@@ -563,7 +563,7 @@ async function playSceneAudio(scene, isCombat) {
 
   // Read persisted volume so realtime-triggered playback respects user setting.
   const vol = await new Promise(r =>
-    chrome.storage.local.get('dnd-music-vol', d => r(d['dnd-music-vol'] ?? 0.1))
+    chrome.storage.local.get('dnd-music-vol', d => r(d['dnd-music-vol'] ?? 0.3))
   );
   sendAudio({ type: 'PLAY_MUSIC', url: audioUrl, volume: vol });
 }
