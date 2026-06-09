@@ -1,4 +1,7 @@
-# DnD Overlay – v2.3
+# DnD Overlay – v2.4.0 (stable)
+
+> **Aktuellste stabile Version: [v2.4.0](https://github.com/soeler1337/dnd-overlay/releases/tag/v2.4.0)**
+> Alle aelteren Releases (v2.3.x) sind veraltet und sollten nicht mehr verwendet werden.
 
 Chrome Extension (MV3) als Echtzeit-Overlay fuer DnD Beyond Spielsitzungen (`dndbeyond.com/games/[game-id]`).
 Der DM steuert Szenen, Musik und Initiative – alle Spieler sehen und hoeren die Aenderung sofort.
@@ -13,7 +16,7 @@ Der DM steuert Szenen, Musik und Initiative – alle Spieler sehen und hoeren di
 | Szenen-Sync aus DDB | automatisch per Namens-Abgleich | – |
 | Umgebungsmusik / Kampfmusik | steuern | hoeren |
 | Wetter-GIF + Wettergeraeusche | schalten | sehen / hoeren |
-| Initiative starten / beenden | ✓ | – |
+| Initiative starten / beenden | ✓ | Sehen (Hintergrund + Wetter ausgeblendet) |
 | Handouts anzeigen (Zoom, Pan) | oeffnen & streamen | oeffnen |
 | Soundboard (Einzel-SFX) | abspielen | hoeren |
 | Kampagnen-Notizen (Markdown) | schreiben | lesen |
@@ -22,20 +25,31 @@ Der DM steuert Szenen, Musik und Initiative – alle Spieler sehen und hoeren di
 | Stream-Overlay (OBS) | Hintergrund + Handout + Wetter + Wuerfellog | – |
 
 ### Szenen-Sync
-Szenen-Wechsel werden **direkt** an alle offenen DDB-Tabs gesendet (kein Realtime-Umweg noetig). Spieler auf anderen Geraeten erhalten die Aenderung ueber Supabase Realtime. Die `campaign_id` wird beim Login in `chrome.storage.local` gespeichert, damit der Service Worker nach einem Neustart die Realtime-Subscription automatisch wieder aufbaut.
+Alle Aenderungen (Szene, Wetter, Initiative, Soundboard, Hintergrund AN/AUS, Notizen) werden per **Supabase Realtime** sofort an alle Spieler auf anderen Geraeten gesendet. Die `campaign_id` wird beim Login in `chrome.storage.local` gespeichert, damit der Service Worker nach einem Neustart die Realtime-Subscription automatisch wieder aufbaut.
 
-Wetter-, Opacity- und Soundboard-Aenderungen werden ebenfalls per Realtime synchronisiert. Das Soundboard benoetigt Migration `004_soundboard_sync.sql` (Spalten `last_sfx_url` / `last_sfx_at` in der `sessions`-Tabelle).
+Auch die **Default-Szene** (wenn DDB-Szene keiner Overlay-Szene entspricht) ist vollstaendig synchronisiert: Hintergrund AN/AUS, Wetter und Initiative funktionieren auch ohne aktive Overlay-Szene fuer alle Spieler.
 
 Wenn der DM in DDB eine Szene auswechselt, prueft die Extension ob eine Overlay-Szene mit demselben Namen existiert und wechselt automatisch. Gibt es keine passende Szene, wird eine Szene namens **„Default"** aktiviert – oder der Standard-Hintergrund angezeigt und an alle Spieler gesendet.
 
-### Testen mit zwei Browserfenstern
-Zum lokalen Testen (DM + Spieler am gleichen PC) ein **Inkognito-Fenster** oeffnen und dort als Spieler einloggen. Die Extension muss dafuer in Chrome unter `chrome://extensions` → **„In Inkognito zulassen"** aktiviert sein.
+### Lautstaerke
+Die Lautstaerke-Regler steuern die Benutzer-Lautstaerke (0–100%). Intern wird ein **Master-Gain** angewendet damit Musik auch bei 100% als Hintergrundmusik klingt:
+
+| Kanal | Master-Gain | Slider 100% = |
+|---|---|---|
+| Musik | 0.4 | 40% |
+| Wetter | 0.6 | 60% |
+| Soundboard | 0.5 | 50% |
+
+Werte koennen in `extension/offscreen/offscreen.js` angepasst werden.
+
+### Testen mit zwei Browsern
+Zum Testen (DM + Spieler am gleichen PC) einen **zweiten Browser** (z.B. Edge) oeffnen und dort als Spieler einloggen. Das verhaelt sich wie echter Remote-Betrieb – Updates kommen ausschliesslich ueber Supabase Realtime.
 
 ---
 
 ## Voraussetzungen
 
-- Chrome-Browser (kein Firefox, kein Edge)
+- Chrome oder Edge (kein Firefox)
 - Ein Supabase-Projekt (Free Tier reicht)
 - Jeder Spieler benoetigt einen eigenen Supabase-Account (Username + Passwort)
 - Der DM legt Szenen, Handouts und Musik per Watcher-Script hoch
@@ -155,7 +169,7 @@ node watcher.js
 
 Tabellen: `profiles`, `campaigns`, `sessions`, `scenes`, `handouts`, `sounds`, `weather_presets`, `campaign_notes`, `dice_rolls`
 
-Migrationen liegen in `supabase/migrations/`. Im Supabase SQL-Editor ausfuehren (zuerst `001_`, dann `002_`).
+Migrationen liegen in `supabase/migrations/` und werden **in der Reihenfolge** `001_` → `006_` im Supabase SQL-Editor ausgefuehrt. Ab v2.3.3 wurden Migrationen `004_`–`006_` direkt per MCP angewendet und muessen nicht manuell ausgefuehrt werden.
 
 ---
 
