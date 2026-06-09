@@ -483,6 +483,14 @@
   // Currently active scene (updated by applyScene and startScenarioNameObserver)
   let _activeDmScene = null;
 
+  // Safe wrapper: chrome.runtime.sendMessage throws synchronously with
+  // "Extension context invalidated" when the extension is reloaded while the
+  // page stays open.  Use safeMsg() in all long-lived callbacks (intervals,
+  // MutationObserver, storage callbacks) so the error never surfaces.
+  function safeMsg(msg) {
+    try { chrome.runtime.sendMessage(msg).catch(() => {}); } catch (_) {}
+  }
+
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.type === 'SCENE_CHANGED') {
       combatActive = !!msg.isCombat;
@@ -585,11 +593,7 @@
     if (!window._dndIsDm) {
       chrome.storage.local.get('dnd-weather-vol', (r) => {
         const vol = r['dnd-weather-vol'] ?? 0.3;
-        if (preset?.sound_url) {
-          chrome.runtime.sendMessage({ type: 'WEATHER_PLAY', url: preset.sound_url, volume: vol }).catch(() => {});
-        } else {
-          chrome.runtime.sendMessage({ type: 'WEATHER_PLAY', url: null, volume: vol }).catch(() => {});
-        }
+        safeMsg({ type: 'WEATHER_PLAY', url: preset?.sound_url || null, volume: vol });
       });
     }
   }
@@ -780,9 +784,9 @@
             applyScene(fallback, combatActive);
             // Play audio for the Default scene (same as a normal scene switch)
             const audioUrl = resolveAudioUrl(fallback, combatActive);
-            if (audioUrl) chrome.runtime.sendMessage({ type: 'AUDIO_PLAY', url: audioUrl, volume: vol }).catch(() => {});
-            else          chrome.runtime.sendMessage({ type: 'AUDIO_STOP' }).catch(() => {});
-            chrome.runtime.sendMessage({ type: 'SCENE_SWITCH', sceneId: fallback.id, campaignId, isCombat: combatActive }).catch(() => {});
+            if (audioUrl) safeMsg({ type: 'AUDIO_PLAY', url: audioUrl, volume: vol });
+            else          safeMsg({ type: 'AUDIO_STOP' });
+            safeMsg({ type: 'SCENE_SWITCH', sceneId: fallback.id, campaignId, isCombat: combatActive });
           }
         } else {
           // No Default scene → show default background, play default ambient or stop
@@ -791,8 +795,8 @@
           setBackground(defBg, defBg ? 1 : 0);
           // Audio: play default ambient if available, otherwise stop
           const defAmbient = window._dndDefaultAmbient || null;
-          if (defAmbient) chrome.runtime.sendMessage({ type: 'AUDIO_PLAY', url: defAmbient, volume: vol }).catch(() => {});
-          else            chrome.runtime.sendMessage({ type: 'AUDIO_STOP' }).catch(() => {});
+          if (defAmbient) safeMsg({ type: 'AUDIO_PLAY', url: defAmbient, volume: vol });
+          else            safeMsg({ type: 'AUDIO_STOP' });
           const nameEl = document.getElementById('dnd-active-scene-name');
           if (nameEl) nameEl.textContent = name + ' –';
           const bgToggle = document.getElementById('dnd-bg-toggle');
@@ -801,7 +805,7 @@
             bgToggle.className = 'dnd-scene-toggle ' + (defBg ? 'on' : 'off');
           }
           // Sync to players: broadcast SCENE_CLEARED so they also show default background
-          chrome.runtime.sendMessage({ type: 'SCENE_CLEAR', campaignId }).catch(() => {});
+          safeMsg({ type: 'SCENE_CLEAR', campaignId });
         }
         return;
       }
@@ -815,11 +819,10 @@
       // Also trigger audio – the RT subscription only plays on player tabs, not DM tab
       const vol = parseFloat(document.getElementById('dnd-volume-slider')?.value ?? 0.1);
       const audioUrl = resolveAudioUrl(match, combatActive);
-      if (audioUrl) chrome.runtime.sendMessage({ type: 'AUDIO_PLAY', url: audioUrl, volume: vol }).catch(() => {});
-      else          chrome.runtime.sendMessage({ type: 'AUDIO_STOP' }).catch(() => {});
+      if (audioUrl) safeMsg({ type: 'AUDIO_PLAY', url: audioUrl, volume: vol });
+      else          safeMsg({ type: 'AUDIO_STOP' });
 
-      chrome.runtime.sendMessage({ type: 'SCENE_SWITCH', sceneId: match.id, campaignId, isCombat: combatActive })
-        .catch(() => {});
+      safeMsg({ type: 'SCENE_SWITCH', sceneId: match.id, campaignId, isCombat: combatActive });
     }
 
     // Capture the current name so the initial page state doesn't trigger a switch
@@ -850,7 +853,7 @@
       const hash = `${data.player}|${data.total}|${Math.floor(Date.now() / 4000)}`;
       if (hash === lastHash) return;
       lastHash = hash;
-      chrome.runtime.sendMessage({ type: 'DICE_ROLL', campaignId, ...data }).catch(() => {});
+      safeMsg({ type: 'DICE_ROLL', campaignId, ...data });
     }
 
     function parseRollNode(node) {
@@ -1021,13 +1024,13 @@
       if (volSlider) {
         volSlider.value = musicVol;
         body.querySelector('#dnd-volume-val').textContent = Math.round(musicVol * 100) + '%';
-        chrome.runtime.sendMessage({ type: 'AUDIO_VOLUME', volume: musicVol });
+        safeMsg({ type: 'AUDIO_VOLUME', volume: musicVol });
       }
       const wVolSlider = body.querySelector('#dnd-weather-volume-slider');
       if (wVolSlider) {
         wVolSlider.value = weatherVol;
         body.querySelector('#dnd-weather-volume-val').textContent = Math.round(weatherVol * 100) + '%';
-        chrome.runtime.sendMessage({ type: 'WEATHER_VOLUME', volume: weatherVol });
+        safeMsg({ type: 'WEATHER_VOLUME', volume: weatherVol });
       }
     });
 
@@ -1523,13 +1526,13 @@
       if (musicSlider) {
         musicSlider.value = musicVol;
         body.querySelector('#dnd-player-music-vol-val').textContent = Math.round(musicVol * 100) + '%';
-        chrome.runtime.sendMessage({ type: 'AUDIO_VOLUME', volume: musicVol });
+        safeMsg({ type: 'AUDIO_VOLUME', volume: musicVol });
       }
       const weatherSlider = body.querySelector('#dnd-player-weather-vol');
       if (weatherSlider) {
         weatherSlider.value = weatherVol;
         body.querySelector('#dnd-player-weather-vol-val').textContent = Math.round(weatherVol * 100) + '%';
-        chrome.runtime.sendMessage({ type: 'WEATHER_VOLUME', volume: weatherVol });
+        safeMsg({ type: 'WEATHER_VOLUME', volume: weatherVol });
       }
     });
 
@@ -1597,7 +1600,9 @@
     }
     body.querySelector('#dnd-player-notes-refresh').addEventListener('click', refreshNotes);
     // Auto-refresh notes every 30 s as Realtime fallback
-    const _notesInterval = setInterval(() => refreshNotes().catch(() => {}), 30000);
+    const _notesInterval = setInterval(() => {
+      try { refreshNotes().catch(() => {}); } catch (_) { clearInterval(_notesInterval); }
+    }, 30000);
 
     body.querySelector('#dnd-player-music-vol').addEventListener('input', function () {
       const v = parseFloat(this.value);
