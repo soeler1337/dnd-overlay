@@ -118,7 +118,25 @@ function subscribeToSession(sessionId, campaignId) {
         else                               sendAudio({ type: 'STOP_MUSIC' });
         return;
       }
-      if (!activeSceneId) return;
+      if (!activeSceneId) {
+        // No active overlay scene – still need to handle combat toggle for remote players
+        if (payload.old?.is_combat !== payload.new.is_combat) {
+          broadcastToTabs({ type: 'COMBAT_CHANGED', isCombat: activeCombat });
+          const { data: campaign } = await sb.from('campaigns')
+            .select('default_ambient_url, default_combat_url').eq('id', campaignId).single();
+          const url = activeCombat
+            ? (campaign?.default_combat_url || campaign?.default_ambient_url || null)
+            : (campaign?.default_ambient_url || null);
+          const vol = await new Promise(r =>
+            chrome.storage.local.get('dnd-music-vol', d => r(d['dnd-music-vol'] ?? 0.3))
+          );
+          if (url) sendAudio({ type: 'PLAY_MUSIC', url, volume: vol });
+          else     sendAudio({ type: 'STOP_MUSIC' });
+          // Hide/restore weather on combat toggle
+          if (activeCombat) playWeatherAudio(null, true);
+        }
+        return;
+      }
 
       // Reload scene if scene switched OR combat state changed
       if (activeSceneId !== wasActive || payload.old?.is_combat !== payload.new.is_combat) {
@@ -226,9 +244,15 @@ async function handleMessage(msg) {
       const profile    = await fetchProfile(data.session.user.id);
       const campaignId = await resolveCampaignId(msg.gameId, profile);
       if (campaignId) {
+        const needsDbWrite = profile.campaign_id !== campaignId;
         profile.campaign_id = campaignId;
-        // Persist so tryResubscribe works after SW is killed and restarted
         chrome.storage.local.set({ 'dnd-campaign-id': campaignId });
+        // Write campaign_id back to profiles table so RLS works for players
+        // who joined via game_id (profile.campaign_id was null in DB)
+        if (needsDbWrite) {
+          sb.from('profiles').update({ campaign_id: campaignId })
+            .eq('user_id', data.session.user.id).then(() => {});
+        }
         const session = await fetchSession(campaignId);
         if (session) subscribeToSession(session.id, campaignId);
       }
@@ -243,9 +267,15 @@ async function handleMessage(msg) {
       const profile    = await fetchProfile(data.user.id);
       const campaignId = await resolveCampaignId(msg.gameId, profile);
       if (campaignId) {
+        const needsDbWrite = profile.campaign_id !== campaignId;
         profile.campaign_id = campaignId;
-        // Persist so tryResubscribe works after SW is killed and restarted
         chrome.storage.local.set({ 'dnd-campaign-id': campaignId });
+        // Write campaign_id back to profiles table so RLS works for players
+        // who joined via game_id (profile.campaign_id was null in DB)
+        if (needsDbWrite) {
+          sb.from('profiles').update({ campaign_id: campaignId })
+            .eq('user_id', data.user.id).then(() => {});
+        }
         const session = await fetchSession(campaignId);
         if (session) subscribeToSession(session.id, campaignId);
       }
