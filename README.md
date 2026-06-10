@@ -67,9 +67,13 @@ Zum Testen (DM + Spieler am gleichen PC) einen **zweiten Browser** (z.B. Edge) o
 5. `https://www.dndbeyond.com/games/[deine-game-id]` oeffnen
 6. Unten rechts erscheint ein roter **DnD**-Button
 
-### 2. Accounts anlegen
+### 2. Accounts anlegen (optional, Quick-Login)
 
-Erstelle `extension/accounts.json` (Vorlage: `accounts.example.json`):
+`accounts.json` ist **nicht** im Release enthalten (enthaelt Klartext-Passwoerter, soll nicht oeffentlich landen).
+Ohne diese Datei erscheint einfach das normale E-Mail/Passwort-Login.
+
+Fuer das Quick-Login-Dropdown legt der DM `extension/accounts.json` an (Vorlage: `accounts.example.json`) und
+verteilt sie **privat** (z.B. Discord-DM) an die Spieler zum Reinkopieren in den entpackten Extension-Ordner:
 
 ```json
 [
@@ -79,7 +83,7 @@ Erstelle `extension/accounts.json` (Vorlage: `accounts.example.json`):
 ```
 
 `username` muss exakt dem Supabase-Profil entsprechen (Spalte `username` in `profiles`).
-Nach dem Erstellen der Datei Extension einmal neu laden (`chrome://extensions` → Reload).
+Nach dem Erstellen/Kopieren der Datei Extension einmal neu laden (`chrome://extensions` → Reload).
 
 ### 3. Nach Code-Aenderungen
 
