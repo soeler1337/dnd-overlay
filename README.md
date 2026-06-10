@@ -1,7 +1,7 @@
-# DnD Overlay – v2.4.0 (stable)
+# DnD Overlay – v2.5.0 (stable)
 
-> **Aktuellste stabile Version: [v2.4.0](https://github.com/soeler1337/dnd-overlay/releases/tag/v2.4.0)**
-> Alle aelteren Releases (v2.3.x) sind veraltet und sollten nicht mehr verwendet werden.
+> **Aktuellste stabile Version: [v2.5.0](https://github.com/soeler1337/dnd-overlay/releases/tag/v2.5.0)**
+> Alle aelteren Releases (v2.4.x und davor) sind veraltet und sollten nicht mehr verwendet werden.
 
 Chrome Extension (MV3) als Echtzeit-Overlay fuer DnD Beyond Spielsitzungen (`dndbeyond.com/games/[game-id]`).
 Der DM steuert Szenen, Musik und Initiative – alle Spieler sehen und hoeren die Aenderung sofort.
