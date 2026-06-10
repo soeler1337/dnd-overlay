@@ -40,9 +40,13 @@
   bgOverlay.id = 'dnd-bg-overlay';
   document.body.appendChild(bgOverlay);
 
-  // Animated overlay (GIF on top of background, e.g. rain)
-  const gifOverlay = document.createElement('div');
+  // Animated overlay (transparent WebM on top of background, e.g. rain)
+  const gifOverlay = document.createElement('video');
   gifOverlay.id = 'dnd-gif-overlay';
+  gifOverlay.autoplay = true;
+  gifOverlay.loop = true;
+  gifOverlay.muted = true;
+  gifOverlay.playsInline = true;
   document.body.appendChild(gifOverlay);
 
   // Sidebar is lifted above overlays via CSS injection (z-index:200),
@@ -586,10 +590,17 @@
     });
     if (combatActive) return; // initiative > wetter
     if (preset?.gif_url) {
-      gifOverlay.style.backgroundImage = `url(${JSON.stringify(preset.gif_url)})`;
+      if (gifOverlay.getAttribute('src') !== preset.gif_url) {
+        gifOverlay.src = preset.gif_url;
+        gifOverlay.load();
+      }
+      gifOverlay.play().catch(() => {});
       gifOverlay.classList.add('active');
     } else {
       gifOverlay.classList.remove('active');
+      gifOverlay.pause();
+      gifOverlay.removeAttribute('src');
+      gifOverlay.load();
     }
   }
   // Note: weather *audio* is handled by the Service Worker (playWeatherAudio) so it
