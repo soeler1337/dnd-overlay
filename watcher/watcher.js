@@ -35,7 +35,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
 //           ambient/        ← ambient music (mp3)
 //           combat/         ← combat music (mp3)
 //       weather/
-//         regen/            ← GIF + optional sound
+//         regen/            ← transparentes WebM (oder GIF) + optional sound
 //         sturm/
 //       handouts/
 //         stadtplan.jpg
@@ -43,6 +43,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
 
 const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif']);
 const AUDIO_EXT = new Set(['.mp3', '.ogg', '.wav', '.m4a']);
+const VIDEO_EXT = new Set(['.webm', '.mp4']);
 
 // Supabase Storage only allows ASCII in keys — replace German umlauts and strip the rest.
 function sanitizePath(str) {
@@ -55,6 +56,7 @@ function sanitizePath(str) {
 
 function isImage(f) { return IMAGE_EXT.has(path.extname(f).toLowerCase()); }
 function isAudio(f) { return AUDIO_EXT.has(path.extname(f).toLowerCase()); }
+function isVideo(f) { return VIDEO_EXT.has(path.extname(f).toLowerCase()); }
 
 // Cache: game_id -> campaign UUID (avoids repeated DB lookups)
 const campaignCache = {};
@@ -88,6 +90,8 @@ async function uploadFile(bucket, storagePath, localPath) {
              : ext === '.png'  ? 'image/png'
              : ext === '.webp' ? 'image/webp'
              : ext === '.gif'  ? 'image/gif'
+             : ext === '.webm' ? 'video/webm'
+             : ext === '.mp4'  ? 'video/mp4'
              : 'image/jpeg';
 
   const { error } = await sb.storage
@@ -180,7 +184,7 @@ async function syncWeather(weatherDir, campaignId, gameId) {
   const name  = path.basename(weatherDir);
   const files = fs.readdirSync(weatherDir);
 
-  const gifFile   = files.find(f => isImage(f));
+  const gifFile   = files.find(f => isVideo(f)) || files.find(f => isImage(f));
   const soundFile = files.find(f => isAudio(f));
 
   if (!gifFile && !soundFile) return;
@@ -188,7 +192,7 @@ async function syncWeather(weatherDir, campaignId, gameId) {
   let gifUrl = null, soundUrl = null;
 
   if (gifFile) {
-    console.log(`[Watcher] Wetter-GIF: ${gameId}/weather/${name}/${gifFile}`);
+    console.log(`[Watcher] Wetter-Video: ${gameId}/weather/${name}/${gifFile}`);
     gifUrl = await uploadFile('backgrounds', sanitizePath(`${campaignId}/weather/${name}/${gifFile}`),
       path.join(weatherDir, gifFile));
   }

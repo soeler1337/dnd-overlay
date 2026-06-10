@@ -15,7 +15,7 @@ Der DM steuert Szenen, Musik und Initiative – alle Spieler sehen und hoeren di
 | Hintergrundbild je Szene | schalten + AN/AUS | sehen |
 | Szenen-Sync aus DDB | automatisch per Namens-Abgleich | – |
 | Umgebungsmusik / Kampfmusik | steuern | hoeren |
-| Wetter-GIF + Wettergeraeusche | schalten | sehen / hoeren |
+| Wetter-Video + Wettergeraeusche | schalten | sehen / hoeren |
 | Initiative starten / beenden | ✓ | Sehen (Hintergrund + Wetter ausgeblendet) |
 | Handouts anzeigen (Zoom, Pan) | oeffnen & streamen | oeffnen |
 | Soundboard (Einzel-SFX) | abspielen | hoeren |
@@ -96,7 +96,7 @@ Das Panel oeffnet sich per Klick auf den **DnD**-Button unten rechts.
 |---|---|
 | **Szene** (Zeile oben) | Zeigt die aktuell aktive Szene; **AN/AUS** blendet den Hintergrund ein/aus |
 | **Initiative starten** | Schaltet Kampfmodus: Hintergrund + Wetter ausgeblendet, Kampfmusik aktiv |
-| **Wetter-Dropdown** | Wettereffekt (GIF + Sound) fuer die aktive Szene |
+| **Wetter-Dropdown** | Wettereffekt (Video + Sound) fuer die aktive Szene |
 | **Szenen** (Liste) | Manuell wechseln; wird automatisch aktualisiert wenn DDB-Szene wechselt |
 | **Handouts** | Bilder/Dokumente oeffnen und auf Stream-Overlay spiegeln |
 | **Soundboard** | Einzel-SFX abspielen (alle Spieler hoeren es gleichzeitig) |
@@ -120,7 +120,7 @@ Hintergrund: transparent (Haken setzen)
 
 Das Overlay zeigt automatisch:
 - Hintergrundbild der aktiven Szene
-- Wetter-GIF
+- Wetter-Video (transparentes WebM, mix-blend-mode: screen)
 - Gespiegelte Handouts (wenn DM eins oeffnet)
 - Wuerfellog (letzte 5 Wuerfe, 18 Sek. sichtbar, Nat-20-Hervorhebung)
 
@@ -148,7 +148,7 @@ content/
       Karte.png
     weather/
       regen/
-        regen.gif
+        regen.webm           # transparentes Video (mix-blend-mode: screen)
         regen.mp3
 ```
 

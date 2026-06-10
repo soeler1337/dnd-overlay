@@ -47,17 +47,18 @@
     }
     #bg.visible { opacity: var(--bg-opacity, 1); }
 
-    /* -- Wetter-GIF -- */
+    /* -- Wetter-Video -- */
     #weather {
       position: absolute;
       inset: 0;
-      background-size: cover;
-      background-position: center;
-      background-repeat: repeat;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      mix-blend-mode: screen;
       opacity: 0;
       transition: opacity 1.2s ease;
     }
-    #weather.visible { opacity: 0.6; }
+    #weather.visible { opacity: 1; }
 
     /* -- Handout Mirror (zentriert, mit Backdrop) -- */
     #handout-wrap {
@@ -227,7 +228,7 @@
 
 <div id="overlay-root">
   <div id="bg"></div>
-  <div id="weather"></div>
+  <video id="weather" autoplay loop muted playsinline></video>
   <div id="handout-wrap">
     <div id="handout-frame">
       <div id="handout-title"></div>
@@ -277,8 +278,18 @@
   }
 
   function applyWeather(preset, isCombat) {
-    if (isCombat || !preset?.gif_url) { wxEl.classList.remove('visible'); return; }
-    wxEl.style.backgroundImage = `url(${JSON.stringify(preset.gif_url)})`;
+    if (isCombat || !preset?.gif_url) {
+      wxEl.classList.remove('visible');
+      wxEl.pause();
+      wxEl.removeAttribute('src');
+      wxEl.load();
+      return;
+    }
+    if (wxEl.getAttribute('src') !== preset.gif_url) {
+      wxEl.src = preset.gif_url;
+      wxEl.load();
+    }
+    wxEl.play().catch(() => {});
     wxEl.classList.add('visible');
   }
 
